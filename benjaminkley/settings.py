@@ -11,6 +11,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
 #AUTH_USER_MODEL = 'authentication.UserProfile'
 
 
@@ -20,7 +24,11 @@ if not SECRET_KEY:
 
 DEBUG = True
 
-ALLOWED_HOSTS = ["benjaminkley-production.up.railway.app", "http://127.0.0.1:8001/"]
+ALLOWED_HOSTS = [
+    "benjaminkley-production.up.railway.app",
+    "127.0.0.1",
+    "localhost",
+]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -46,6 +54,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
 
 ROOT_URLCONF = 'benjaminkley.urls'
@@ -163,3 +172,12 @@ EMAIL_USE_SSL = False
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.getenv('EMAIL_HOST_USER')
+
+
+
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://benjaminkley-production.up.railway.app",
+    "http://127.0.0.1:8001",
+    "http://localhost:8000",
+]
