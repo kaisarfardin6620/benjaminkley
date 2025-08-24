@@ -20,7 +20,7 @@ if not SECRET_KEY:
 
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["benjaminkley-production.up.railway.app", "http://127.0.0.1:8001/"]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
