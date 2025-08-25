@@ -1,0 +1,11 @@
+# railway.toml
+
+[nix]
+pkgs = [
+  "python311",
+  "poetry",
+  "ffmpeg",
+  "libgl",
+  "libglvnd",
+  "glib"
+]
