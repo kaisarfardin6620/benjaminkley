@@ -1,6 +1,6 @@
 # scans/tasks.py
 
-from celery import shared_task
+from benjaminkley.celery import shared_task
 from .models import Scan
 from .processing.pipeline import run_full_scan_pipeline
 

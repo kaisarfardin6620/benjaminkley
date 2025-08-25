@@ -3,12 +3,11 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
-
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('auth/', include('authentication.urls')),
+    path('api/auth/', include('authentication.urls')),
     path('api/contact/', include('contact_support.urls')),
-
+    path('api/scans/', include('scans.urls')),
 ]
 
 if settings.DEBUG:
