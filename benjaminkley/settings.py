@@ -23,13 +23,9 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 if not SECRET_KEY:
     raise ValueError("SECRET_KEY must be set in the .env file")
 
-DEBUG = False
+DEBUG = True
 
-ALLOWED_HOSTS = [
-    "benjaminkley-production.up.railway.app",
-    "127.0.0.1",
-    "localhost",
-]
+ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
     'corsheaders',
@@ -125,8 +121,8 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.UserRateThrottle'
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '100000/day',
-        'user': '10000000000/day'
+        'anon': '100/day',
+        'user': '1000/day'
     }
 }
 
@@ -176,10 +172,6 @@ DEFAULT_FROM_EMAIL = os.getenv('EMAIL_HOST_USER')
 
 
 
-CSRF_TRUSTED_ORIGINS = [
-    "https://benjaminkley-production.up.railway.app",
-    "http://127.0.0.1:8001",
-    "http://localhost:8000",
-]
+CSRF_TRUSTED_ORIGINS = ["http://127.0.0.1:8001",]
 
 CORS_TRUSTED_ORIGINS = CSRF_TRUSTED_ORIGINS

@@ -15,7 +15,7 @@ class PasswordValidator:
         sha1 = hashlib.sha1(password.encode()).hexdigest().upper()
         prefix, suffix = sha1[:5], sha1[5:]
         try:
-            response = requests.get(f"https://api.pwnedpasswords.com/range/{prefix}", timeout=2)
+            response = requests.get(f"https://api.pwnedpasswords.com/range/{prefix}", timeout=3)
             return suffix in response.text
         except requests.RequestException:
             return False
@@ -32,7 +32,7 @@ class PasswordValidator:
             raise serializers.ValidationError("Password must contain at least one digit.")
         if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
             raise serializers.ValidationError("Password must contain at least one special character.")
-        
+
 class SignupSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     password = serializers.CharField(write_only=True, required=True, validators=[PasswordValidator.validate_password_strength])
@@ -48,11 +48,12 @@ class SignupSerializer(serializers.Serializer):
 
     def validate(self, data):
         if data['password'] != data['confirm_password']:
-            raise serializers.ValidationError("Passwords do not match.")
+            raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
         if User.objects.filter(email=data['email']).exists():
-            raise serializers.ValidationError("This email is already in use by another account.")
+            raise serializers.ValidationError({"email": "This email is already in use by another account."})
         if PasswordValidator.validate_breached_password(data['password']):
-            raise serializers.ValidationError("This password has been found in a data breach. Please choose a different one.")
+            raise serializers.ValidationError({"password": "This password has been found in a data breach. Please choose a different one."})
+        data.pop('confirm_password', None)
         return data
 
     def create(self, validated_data):
@@ -60,12 +61,10 @@ class SignupSerializer(serializers.Serializer):
             username=validated_data['email'],
             email=validated_data['email'],
             password=validated_data['password'],
-            # Set first_name and last_name on the User model
             first_name=validated_data.get('first_name'),
             last_name=validated_data.get('last_name'),
             is_active=False
         )
-        # Remove the redundant fields from UserProfile creation
         UserProfile.objects.create(
             user=user,
             profile_picture=validated_data.get('profile_picture'),
@@ -78,22 +77,7 @@ class SignupSerializer(serializers.Serializer):
         return user
 
 class OTPVerificationSerializer(serializers.Serializer):
-    otp = serializers.CharField()
-
-class PasswordResetRequestSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-
-class PasswordResetConfirmSerializer(serializers.Serializer):
-    token = serializers.UUIDField()
-    new_password = serializers.CharField(write_only=True, required=True, validators=[PasswordValidator.validate_password_strength])
-    new_password_confirmation = serializers.CharField(write_only=True, required=True)
-
-    def validate(self, data):
-        if data['new_password'] != data['new_password_confirmation']:
-            raise serializers.ValidationError("Passwords do not match.")
-        if PasswordValidator.validate_breached_password(data['new_password']):
-            raise serializers.ValidationError("This password has been found in a data breach. Please choose a different one.")
-        return data
+    otp = serializers.CharField(max_length=6, min_length=6)
 
 class ChangePasswordSerializer(serializers.Serializer):
     old_password = serializers.CharField(required=True)
@@ -110,47 +94,47 @@ class ChangePasswordSerializer(serializers.Serializer):
         user = self.context['request'].user
         if PasswordValidator.validate_breached_password(value):
             raise serializers.ValidationError("This password has been found in a data breach. Please choose a different one.")
-        for history in PasswordHistory.objects.filter(user=user):
+        if user.check_password(value):
+            raise serializers.ValidationError("New password cannot be the same as the old password.")
+        for history in PasswordHistory.objects.filter(user=user).order_by('-created_at')[:10]:
             if check_password(value, history.hashed_password):
-                raise serializers.ValidationError("Cannot reuse recent passwords.")
+                raise serializers.ValidationError("Cannot reuse a recent password.")
         return value
 
     def validate(self, data):
         if data['new_password'] != data['new_password_confirmation']:
-            raise serializers.ValidationError("New passwords do not match.")
+            raise serializers.ValidationError({"new_password_confirmation": "New passwords do not match."})
         return data
 
 class ProfileSerializer(serializers.ModelSerializer):
-    # Use source to get these fields from the related user model
     first_name = serializers.CharField(source='user.first_name')
     last_name = serializers.CharField(source='user.last_name')
     email = serializers.EmailField(source='user.email', read_only=True)
     
     class Meta:
         model = UserProfile
-        # Add the new fields to the fields list
-        fields = ['first_name', 'last_name', 'email', 'profile_picture', 'role', 'clinic_name', 'date_of_birth', 'contact_number', 'address']
+        fields = ['first_name', 'last_name', 'email', 'profile_picture', 'role', 'clinic_name', 'date_of_birth', 'contact_number', 'address', 'status']
 
 class UpdateProfileSerializer(serializers.ModelSerializer):
-    first_name = serializers.CharField(source='user.first_name', required=False, write_only=True)
-    last_name = serializers.CharField(source='user.last_name', required=False, write_only=True)
-    email = serializers.EmailField(source='user.email', required=False, write_only=True)
-    date_of_birth = serializers.DateField(required=False, write_only=True)
+    first_name = serializers.CharField(source='user.first_name', required=False)
 
     class Meta:
         model = UserProfile
-        fields = ['first_name', 'last_name','email', 'date_of_birth']
+        fields = ['first_name', 'role', 'clinic_name', 'date_of_birth', 'address']
 
     def update(self, instance, validated_data):
-        # Update related user fields
-        user_data = validated_data.pop('user', {})
-        for attr, value in user_data.items():
-            setattr(instance.user, attr, value)
-        instance.user.save()
+        user = instance.user
+        user_data = validated_data.get('user', {})
+        user.first_name = user_data.get('first_name', user.first_name)
+        user.save()
 
-        # Update UserProfile fields
-        return super().update(instance, validated_data)
-
+        instance.role = validated_data.get('role', instance.role)
+        instance.clinic_name = validated_data.get('clinic_name', instance.clinic_name)
+        instance.date_of_birth = validated_data.get('date_of_birth', instance.date_of_birth)
+        instance.address = validated_data.get('address', instance.address)
+        instance.save()
+        
+        return instance
 
 class ProfilePictureSerializer(serializers.ModelSerializer):
     class Meta:
@@ -168,4 +152,34 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
 
 class LogoutSerializer(serializers.Serializer):
-    refresh = serializers.CharField()    
+    refresh = serializers.CharField()
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+class PasswordResetVerifyOTPSerializer(serializers.Serializer):
+    otp = serializers.CharField(max_length=6, min_length=6)
+
+class SetNewPasswordSerializer(serializers.Serializer):
+    password_change_ticket = serializers.UUIDField()
+    new_password = serializers.CharField(write_only=True, required=True, validators=[PasswordValidator.validate_password_strength])
+    new_password_confirmation = serializers.CharField(write_only=True, required=True)
+
+    def validate(self, data):
+        if data['new_password'] != data['new_password_confirmation']:
+            raise serializers.ValidationError({"new_password_confirmation": "Passwords do not match."})
+        if PasswordValidator.validate_breached_password(data['new_password']):
+            raise serializers.ValidationError({"new_password": "This password has been found in a data breach."})
+        return data
+    
+class DeleteAccountSerializer(serializers.Serializer):
+    password = serializers.CharField(
+        write_only=True,
+        required=True,
+        style={'input_type': 'password'}
+    )
+
+    def validate_password(self, value):
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError("Your password was incorrect. Please try again.")
+        return value    

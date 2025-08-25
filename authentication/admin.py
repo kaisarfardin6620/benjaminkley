@@ -1,12 +1,8 @@
-# authentication/admin.py
-
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import User
 from .models import UserProfile, AuthToken, PasswordHistory
 
-# --- SOLUTION ---
-# Check if the default User admin is registered before trying to unregister it.
 if admin.site.is_registered(User):
     admin.site.unregister(User)
 
@@ -15,8 +11,6 @@ class UserProfileInline(admin.StackedInline):
     can_delete = False
     verbose_name_plural = 'Profile'
     fk_name = 'user'
-
-# Register the User model with our custom admin class
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
     inlines = (UserProfileInline,)

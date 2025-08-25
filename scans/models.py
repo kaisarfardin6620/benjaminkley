@@ -1,5 +1,3 @@
-# scans/models.py
-
 from django.db import models
 from django.contrib.auth.models import User
 import uuid
@@ -31,11 +29,11 @@ class Scan(models.Model):
     )
     processed_3d_model = models.FileField(upload_to='scans/outputs/', null=True, blank=True)
     
-    # --- Final Estimated Measurements (stored in cm) ---
-    head_width = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
-    head_length = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
-    ear_to_ear = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
-    eye_to_eye = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    # --- Final Estimated Measurements (stored in cm as floats) ---
+    head_width = models.FloatField(null=True, blank=True)
+    head_length = models.FloatField(null=True, blank=True)
+    ear_to_ear = models.FloatField(null=True, blank=True)
+    eye_to_eye = models.FloatField(null=True, blank=True)
     
     # --- Fields for logging the estimation process for safety and traceability ---
     calibration_method = models.CharField(max_length=50, null=True, blank=True)
