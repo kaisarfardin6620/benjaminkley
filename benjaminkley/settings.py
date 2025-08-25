@@ -23,7 +23,7 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 if not SECRET_KEY:
     raise ValueError("SECRET_KEY must be set in the .env file")
 
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = [
     "benjaminkley-production.up.railway.app",
