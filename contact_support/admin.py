@@ -3,7 +3,7 @@ from .models import ContactMessage
 
 @admin.register(ContactMessage)
 class ContactMessageAdmin(admin.ModelAdmin):
-    list_display = ('name', 'email', 'user', 'is_replied', 'created_at')
+    list_display = ('id', 'name', 'email', 'user', 'is_replied', 'created_at')
     list_filter = ('is_replied', 'created_at')
     search_fields = ('name', 'email', 'message', 'user__username')
     readonly_fields = ('user', 'name', 'email', 'message', 'created_at')

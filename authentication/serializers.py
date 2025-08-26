@@ -42,7 +42,7 @@ class SignupSerializer(serializers.Serializer):
     profile_picture = serializers.ImageField(required=False, allow_null=True)
     role = serializers.CharField(max_length=255, required=True)
     clinic_name = serializers.CharField(max_length=255, required=True)
-    date_of_birth = serializers.DateField(required=True)
+    date_of_birth = serializers.DateField(required=True, input_formats=['%m-%d-%Y'])
     contact_number = serializers.CharField(max_length=20, required=True)
     address = serializers.CharField(max_length=255, required=True)
 
@@ -117,6 +117,7 @@ class ProfileSerializer(serializers.ModelSerializer):
 
 class UpdateProfileSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(source='user.first_name', required=False)
+    date_of_birth = serializers.DateField(required=False, input_formats=['%m-%d-%Y'])
 
     class Meta:
         model = UserProfile
@@ -124,6 +125,7 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         user = instance.user
+        
         user_data = validated_data.get('user', {})
         user.first_name = user_data.get('first_name', user.first_name)
         user.save()
@@ -153,6 +155,7 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class LogoutSerializer(serializers.Serializer):
     refresh = serializers.CharField()
+    
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
@@ -182,4 +185,4 @@ class DeleteAccountSerializer(serializers.Serializer):
         user = self.context['request'].user
         if not user.check_password(value):
             raise serializers.ValidationError("Your password was incorrect. Please try again.")
-        return value    
+        return value

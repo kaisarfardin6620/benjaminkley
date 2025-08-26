@@ -11,7 +11,6 @@ class Scan(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='scans')
 
-    # --- User-provided inputs from the "Input Info" screen ---
     name = models.CharField(max_length=255)
     notes = models.TextField(blank=True, null=True)
     custom_field = models.CharField(max_length=255, blank=True, null=True)
@@ -20,34 +19,21 @@ class Scan(models.Model):
     image_left = models.ImageField(upload_to='scans/inputs/')
     image_right = models.ImageField(upload_to='scans/inputs/')
 
-    # --- Processing status and final outputs ---
-    status = models.CharField(
-        max_length=20,
-        choices=Status.choices,
-        default=Status.PROCESSING,
-        help_text="The current processing status of the scan."
-    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PROCESSING)
+    failure_reason = models.TextField(null=True, blank=True)
+    
     processed_3d_model = models.FileField(upload_to='scans/outputs/', null=True, blank=True)
     
-    # --- Final Estimated Measurements (stored in cm as floats) ---
-    head_width = models.FloatField(null=True, blank=True)
-    head_length = models.FloatField(null=True, blank=True)
-    ear_to_ear = models.FloatField(null=True, blank=True)
-    eye_to_eye = models.FloatField(null=True, blank=True)
-    
-    # --- Fields for logging the estimation process for safety and traceability ---
-    calibration_method = models.CharField(max_length=50, null=True, blank=True)
-    assumed_ipd_mm = models.FloatField(null=True, blank=True)
-    calculated_pixels_per_mm = models.FloatField(null=True, blank=True)
-    failure_reason = models.TextField(null=True, blank=True, help_text="Logs why a scan failed.")
+    head_circumference_A = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    forehead_to_back_B = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    cross_measurement_C = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    under_chin_D = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-created_at']
-        verbose_name = "User Scan"
-        verbose_name_plural = "User Scans"
 
     def __str__(self):
         return f"Scan '{self.name}' for {self.user.username}"

@@ -2,6 +2,8 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.validators import RegexValidator
+from phonenumber_field.modelfields import PhoneNumberField
+
 import uuid
 
 class UserProfile(models.Model):
@@ -10,11 +12,11 @@ class UserProfile(models.Model):
     role = models.CharField(max_length=255)
     clinic_name = models.CharField(max_length=255)
     date_of_birth = models.DateField()
-    contact_number = models.CharField(max_length=20, validators=[RegexValidator(regex=r"^\+?[1-9]\d{1,14}$", message="Phone number must be in E.164 format: '+1234567890'")])
-    address = models.CharField(max_length=255)
+    contact_number = PhoneNumberField(region=None)
     status = models.CharField(max_length=50, default='Pending')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    address = models.CharField(max_length=255)
 
     def __repr__(self):
         return f"<User object: {self.user.first_name} {self.user.last_name}>"

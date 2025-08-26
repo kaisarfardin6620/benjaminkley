@@ -1,11 +1,9 @@
-# scans/views.py
-
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .models import Scan
 from .serializers import ScanCreateSerializer, ScanDetailSerializer
-import traceback # Import the traceback module for detailed error logging
+import traceback
 
 from .processing.pipeline import run_full_scan_pipeline
 
@@ -31,64 +29,31 @@ class ScanViewSet(viewsets.ModelViewSet):
         scan = serializer.instance
 
         try:
-            print(f"Starting SYNCHRONOUS AI pipeline for scan ID: {scan.id}...")
             results = run_full_scan_pipeline(scan)
             
-            # --- START OF AGGRESSIVE DEBUGGING ---
-            
-            print("\n--- DEBUGGING SNAPSHOT ---")
-            print(f"Type of 'results': {type(results)}")
-            
             measurements = results.get('measurements', {})
-            print(f"Type of 'measurements': {type(measurements)}")
-            
-            # Print the type of every single value we are about to use.
-            # This will find the string.
-            print(f"Value of eye_to_eye: {measurements.get('eye_to_eye')} (Type: {type(measurements.get('eye_to_eye'))})")
-            print(f"Value of ear_to_ear: {measurements.get('ear_to_ear')} (Type: {type(measurements.get('ear_to_ear'))})")
-            print(f"Value of head_height: {measurements.get('head_height')} (Type: {type(measurements.get('head_height'))})")
-            print(f"Value of head_width: {measurements.get('head_width')} (Type: {type(measurements.get('head_width'))})")
-            print(f"Value of head_length: {measurements.get('head_length')} (Type: {type(measurements.get('head_length'))})")
-            print("--- END DEBUGGING SNAPSHOT ---\n")
-
-            # --- END OF AGGRESSIVE DEBUGGING ---
-
-            # Now, attempt the conversion
-            scan.eye_to_eye = float(measurements.get('eye_to_eye', 0)) / 10.0
-            scan.ear_to_ear = float(measurements.get('ear_to_ear', 0)) / 10.0
-            scan.head_height = float(measurements.get('head_height', 0)) / 10.0
-            scan.head_width = float(measurements.get('head_width', 0)) / 10.0
-            scan.head_length = float(measurements.get('head_length', 0)) / 10.0
-
-            scan.calibration_method = measurements.get('calibration_method')
-            scan.assumed_ipd_mm = measurements.get('assumed_ipd_mm')
-            scan.calculated_pixels_per_mm = measurements.get('calculated_pixels_per_mm')
-            
             reconstruction = results.get('reconstruction', {})
+            
+            # Save the new surface measurements (converting from mm to cm)
+            scan.head_circumference_A = float(measurements.get('head_circumference_A', 0)) / 10.0
+            scan.forehead_to_back_B = float(measurements.get('forehead_to_back_B', 0)) / 10.0
+            scan.cross_measurement_C = float(measurements.get('cross_measurement_C', 0)) / 10.0
+            scan.under_chin_D = float(measurements.get('under_chin_D', 0)) / 10.0
+            
             scan.processed_3d_model.name = reconstruction.get('output_model_relative_path')
-
             scan.status = Scan.Status.COMPLETED
-            print(f"SYNCHRONOUS pipeline finished successfully for scan ID: {scan.id}")
 
+            scan.save()
             response_serializer = ScanDetailSerializer(scan, context={'request': request})
-            response_status = status.HTTP_201_CREATED
-            response_data = response_serializer.data
+            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
         except Exception as e:
             error_message = str(e)
-            # This will now print the full traceback to your console, showing the exact line of the error.
-            print(f"CRITICAL ERROR during synchronous processing of scan {scan.id}:")
             traceback.print_exc()
             
             scan.status = Scan.Status.FAILED
             scan.failure_reason = error_message
+            scan.save()
             
-            response_status = status.HTTP_500_INTERNAL_SERVER_ERROR
-            response_data = {
-                "detail": "Scan processing failed.",
-                "failure_reason": error_message,
-                "scan_id": scan.id
-            }
-        
-        scan.save()
-        return Response(response_data, status=response_status)
+            response_data = { "detail": "Scan processing failed.", "failure_reason": error_message, "scan_id": scan.id }
+            return Response(response_data, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
