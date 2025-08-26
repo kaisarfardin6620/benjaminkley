@@ -177,8 +177,8 @@ DEFAULT_FROM_EMAIL = os.getenv('EMAIL_HOST_USER')
 
 
 CSRF_TRUSTED_ORIGINS = [
+    "https://benjaminkley-production-a6fc.up.railway.app",
     "https://benjaminkley-production.up.railway.app",
-    # Keep these for local testing
     "http://127.0.0.1:8001",
     "http://localhost:8001",
 ]
