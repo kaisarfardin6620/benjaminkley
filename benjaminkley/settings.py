@@ -2,6 +2,7 @@ from pathlib import Path
 from datetime import timedelta
 import os
 from dotenv import load_dotenv
+from decouple import config
 import dj_database_url
 
 load_dotenv()
@@ -23,11 +24,7 @@ if not SECRET_KEY:
 
 DEBUG = True
 
-ALLOWED_HOSTS = [
-    "benjaminkley-production-a6fc.up.railway.app",
-    "127.0.0.1",
-    "localhost",
-]
+ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
     'corsheaders',
@@ -80,14 +77,10 @@ WSGI_APPLICATION = 'benjaminkley.wsgi.application'
 
 
 DATABASES = {
-    # This will read the DATABASE_URL from Railway's environment variables.
-    # If it can't find it (like on your local machine without a .env entry),
-    # it will fall back to using your local SQLite database for easy testing.
-    'default': dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=600, # Keeps connections alive for 10 minutes
-        conn_health_checks=True,
-    )
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
 }
 
 
@@ -176,12 +169,8 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.getenv('EMAIL_HOST_USER')
 
 
-CSRF_TRUSTED_ORIGINS = [
-    "https://benjaminkley-production-a6fc.up.railway.app",
-    "https://benjaminkley-production.up.railway.app",
-    "http://127.0.0.1:8001",
-    "http://localhost:8001",
-]
 
-CORS_ALLOWED_ORIGINS = CSRF_TRUSTED_ORIGINS
-CORS_ALLOW_CREDENTIALS = True
+
+CSRF_TRUSTED_ORIGINS = ["http://127.0.0.1:8001",]
+
+CORS_TRUSTED_ORIGINS = CSRF_TRUSTED_ORIGINS

@@ -7,9 +7,7 @@ import trimesh
 def reshape_model_to_match_photos(base_mesh, image_paths):
     print("--- Running Placeholder 3D Reshaping Logic ---")
     reshaped_mesh = base_mesh
-    
     return reshaped_mesh
-
 
 def generate_head_model(image_paths: dict, scan_id: str) -> dict:
     gender = "Male" 

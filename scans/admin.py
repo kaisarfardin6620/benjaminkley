@@ -1,5 +1,6 @@
 from django.contrib import admin
 from .models import Scan
+from django.db import models
 
 @admin.register(Scan)
 class ScanAdmin(admin.ModelAdmin): 
@@ -21,12 +22,12 @@ class ScanAdmin(admin.ModelAdmin):
         ('User Inputs', {
             'fields': ('notes', 'custom_field', 'image_front', 'image_back', 'image_left', 'image_right')
         }),
-        ('Final Surface Measurements (cm)', {
+        ('Final Measurements (cm)', {
             'fields': (
-                'head_circumference_A',
-                'forehead_to_back_B',
-                'cross_measurement_C',
-                'under_chin_D'
+                'eye_to_eye', 'ear_to_ear', 'head_width', 'head_height',
+                'head_circumference_A', 'forehead_to_back_B', 'cross_measurement_C', 'under_chin_D',
+                'eyebrow_to_earlobe_E', 'eye_corner_to_ear_F', 'ear_height_G', 'ear_width_H',
+                'cheek_guard_clearance_L', 'cheek_guard_height_M', 'cheek_guard_width_N'
             )
         }),
         ('Output Files', {
@@ -37,11 +38,8 @@ class ScanAdmin(admin.ModelAdmin):
         }),
     )
 
-    readonly_fields = (
-        'id', 'user', 'created_at', 'updated_at', 'processed_3d_model',
-        'failure_reason', 'head_circumference_A', 'forehead_to_back_B',
-        'cross_measurement_C', 'under_chin_D'
-    )
+    readonly_fields = ('id', 'user', 'created_at', 'updated_at', 'processed_3d_model', 'failure_reason') + \
+                      tuple(f.name for f in Scan._meta.get_fields() if isinstance(f, models.DecimalField))
 
     def has_add_permission(self, request):
         return False

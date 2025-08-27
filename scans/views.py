@@ -34,11 +34,9 @@ class ScanViewSet(viewsets.ModelViewSet):
             measurements = results.get('measurements', {})
             reconstruction = results.get('reconstruction', {})
             
-            # Save the new surface measurements (converting from mm to cm)
-            scan.head_circumference_A = float(measurements.get('head_circumference_A', 0)) / 10.0
-            scan.forehead_to_back_B = float(measurements.get('forehead_to_back_B', 0)) / 10.0
-            scan.cross_measurement_C = float(measurements.get('cross_measurement_C', 0)) / 10.0
-            scan.under_chin_D = float(measurements.get('under_chin_D', 0)) / 10.0
+            for key, value in measurements.items():
+                if hasattr(scan, key):
+                    setattr(scan, key, float(value) / 10.0)
             
             scan.processed_3d_model.name = reconstruction.get('output_model_relative_path')
             scan.status = Scan.Status.COMPLETED
@@ -55,5 +53,9 @@ class ScanViewSet(viewsets.ModelViewSet):
             scan.failure_reason = error_message
             scan.save()
             
-            response_data = { "detail": "Scan processing failed.", "failure_reason": error_message, "scan_id": scan.id }
+            response_data = {
+                "detail": "Scan processing failed.",
+                "failure_reason": error_message,
+                "scan_id": str(scan.id)
+            }
             return Response(response_data, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
