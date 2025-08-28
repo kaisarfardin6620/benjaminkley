@@ -1,11 +1,13 @@
+# scans/views.py
+
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .models import Scan
 from .serializers import ScanCreateSerializer, ScanDetailSerializer
-import traceback
 
-from .processing.pipeline import run_full_scan_pipeline
+# --- CRITICAL CHANGE: We now import the task, not the pipeline ---
+from .tasks import process_scan_task
 
 class ScanViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
@@ -22,40 +24,20 @@ class ScanViewSet(viewsets.ModelViewSet):
         serializer.save(user=self.request.user)
 
     def create(self, request, *args, **kwargs):
+        """
+        This is now a fast, asynchronous method.
+        It creates the scan, triggers the background task, and responds instantly.
+        """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         
         scan = serializer.instance
 
-        try:
-            results = run_full_scan_pipeline(scan)
-            
-            measurements = results.get('measurements', {})
-            reconstruction = results.get('reconstruction', {})
-            
-            for key, value in measurements.items():
-                if hasattr(scan, key):
-                    setattr(scan, key, float(value) / 10.0)
-            
-            scan.processed_3d_model.name = reconstruction.get('output_model_relative_path')
-            scan.status = Scan.Status.COMPLETED
+        # --- This is the key change ---
+        # Instead of running the pipeline, we call .delay() to send it to Celery.
+        process_scan_task.delay(str(scan.id))
 
-            scan.save()
-            response_serializer = ScanDetailSerializer(scan, context={'request': request})
-            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
-
-        except Exception as e:
-            error_message = str(e)
-            traceback.print_exc()
-            
-            scan.status = Scan.Status.FAILED
-            scan.failure_reason = error_message
-            scan.save()
-            
-            response_data = {
-                "detail": "Scan processing failed.",
-                "failure_reason": error_message,
-                "scan_id": str(scan.id)
-            }
-            return Response(response_data, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        headers = self.get_success_headers(serializer.data)
+        # We return the initial "PROCESSING" state of the object
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)

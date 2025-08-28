@@ -1,1 +1,2 @@
-web: waitress-serve --listen=0.0.0.0:$PORT --threads=8 --connection-limit=100 benjaminkley.wsgi:application
+web: gunicorn benjaminkley.wsgi
+worker: celery -A benjaminkley worker -l info
