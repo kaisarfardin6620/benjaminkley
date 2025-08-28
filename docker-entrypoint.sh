@@ -15,10 +15,12 @@ python manage.py migrate --no-input
 echo "--- Collecting static files ---"
 python manage.py collectstatic --no-input --clear
 
-# Start the Gunicorn web server in the background
-# It will listen on the port provided by the PORT environment variable.
-echo "--- Starting Gunicorn web server on port $PORT ---"
-gunicorn benjaminkley.wsgi --bind 0.0.0.0:$PORT &
+# --- START OF THE FIX ---
+# We are now hardcoding the port to 8080, which is the standard
+# port that Railway's gateway will try to connect to.
+echo "--- Starting Gunicorn web server on port 8080 ---"
+gunicorn benjaminkley.wsgi --bind 0.0.0.0:8080 &
+# --- END OF THE FIX ---
 
 # Start the Celery worker in the foreground
 # This becomes the main process that keeps the container alive.
