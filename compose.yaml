@@ -1,0 +1,53 @@
+# compose.yaml (FINAL VERSION)
+
+services:
+  # The Redis service (no changes)
+  redis:
+    image: "redis:alpine"
+    container_name: benjaminkley-redis
+    networks:
+      - app-network
+
+  # The PostgreSQL Database service (no changes)
+  db:
+    image: "postgres:15-alpine"
+    container_name: benjaminkley-db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_DB=benjaminkley_db
+      - POSTG-RES_USER=benjaminkley_user
+      - POSTGRES_PASSWORD=a_strong_password_here
+    networks:
+      - app-network
+
+  # Your Django Application Service
+  app:
+    build: .
+    container_name: benjaminkley-app
+    ports:
+      - "8001:8000" # Maps port 8000 inside the container to 8001 on your PC
+    volumes:
+      - .:/app
+    environment:
+      - SECRET_KEY=a_different_dev_secret_key
+      - DEBUG=True
+      - DATABASE_URL=postgres://benjaminkley_user:a_strong_password_here@db:5432/benjaminkley_db
+      - REDIS_URL=redis://redis:6379/0
+      - EMAIL_HOST_USER=your_email@gmail.com
+      - EMAIL_HOST_PASSWORD=your_gmail_app_password
+      # --- THIS IS THE IMPORTANT PART ---
+      # We explicitly set the PORT for the Gunicorn process inside the container.
+      - PORT=8000
+    depends_on:
+      - db
+      - redis
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
