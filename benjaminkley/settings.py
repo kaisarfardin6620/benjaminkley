@@ -22,18 +22,21 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 
 # --- HOSTING & SECURITY ---
-# Start with a base list for local development.
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost', 'materials-injury-des-brand.trycloudflare.com']
-CSRF_TRUSTED_ORIGINS = ['http://127.0.0.1:8001', 'http://localhost:8001']
 
-# This is a safer way to get and parse the hostname from Railway.
-RAILWAY_HOSTNAME = os.getenv('RAILWAY_STATIC_URL')
-if RAILWAY_HOSTNAME:
-    # Remove the protocol part (e.g., 'https://') to get just the domain
-    # This is much safer than splitting and prevents IndexError.
-    clean_hostname = RAILWAY_HOSTNAME.replace("https://", "").replace("http://", "")
-    ALLOWED_HOSTS.append(clean_hostname)
-    CSRF_TRUSTED_ORIGINS.append(f"https://{clean_hostname}")
+# --- ALLOWED HOSTS for Railway ---
+ALLOWED_HOSTS = [
+    '127.0.0.1',
+    'localhost',
+    'benjaminkley-production.up.railway.app',
+]
+CSRF_TRUSTED_ORIGINS = [
+    'http://127.0.0.1:8001',
+    'http://localhost:8001',
+    'https://benjaminkley-production.up.railway.app',
+]
+
+# --- SECURE PROXY SSL HEADER for Nginx/Proxy ---
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 
 # --- APPLICATIONS & MIDDLEWARE ---
@@ -84,11 +87,13 @@ DATABASES = {
 }
 
 # --- STATIC & MEDIA FILES ---
+
+# --- STATIC & MEDIA FILES (for Docker/Nginx) ---
 AI_MODELS_DIR = BASE_DIR / 'ai_models'
 STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / "staticfiles"
+STATIC_ROOT = '/app/staticfiles'
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = '/app/media'
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # --- CELERY AND REDIS CONFIGURATION (FLEXIBLE) ---
