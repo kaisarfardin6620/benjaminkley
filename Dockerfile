@@ -38,8 +38,12 @@ COPY --from=builder /opt/venv /opt/venv
 COPY . .
 
 # Copy and make the script executable BEFORE changing user
+
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
+
+# Create staticfiles directory and set permissions
+RUN mkdir -p /app/staticfiles && chmod -R 777 /app/staticfiles
 
 # Change ownership of all files to the new user
 RUN chown -R app:app /app

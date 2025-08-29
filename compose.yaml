@@ -7,6 +7,8 @@ services:
     container_name: benjaminkley-app
     ports:
       - "8001:8000"
+    volumes:
+      - staticfiles:/app/staticfiles
     # volumes:
     #   - .:/app
     env_file:
@@ -25,8 +27,8 @@ services:
   celery:
     build: .
     container_name: benjaminkley-celery
-    volumes:
-      - .:/app
+    # volumes:
+    #   - .:/app
     env_file:
       - .env
     environment:
@@ -43,8 +45,8 @@ services:
   celery-beat:
     build: .
     container_name: benjaminkley-celery-beat
-    volumes:
-      - .:/app
+    # volumes:
+    #   - .:/app
     env_file:
       - .env
     environment:
@@ -64,6 +66,7 @@ services:
       - "8080:80"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - staticfiles:/app/staticfiles:ro
     depends_on:
       - app
     networks:
@@ -72,3 +75,5 @@ services:
 networks:
   app-network:
     driver: bridge
+volumes:
+  staticfiles:

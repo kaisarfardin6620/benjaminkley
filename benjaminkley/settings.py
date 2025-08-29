@@ -30,8 +30,8 @@ ALLOWED_HOSTS = [
     'benjaminkley-production.up.railway.app',
 ]
 CSRF_TRUSTED_ORIGINS = [
-    'http://127.0.0.1:8001',
-    'http://localhost:8001',
+    'http://127.0.0.1:8080',
+    'http://localhost:8080',
     'https://benjaminkley-production.up.railway.app',
 ]
 
