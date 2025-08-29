@@ -23,7 +23,7 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 # --- HOSTING & SECURITY ---
 # Start with a base list for local development.
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', 'materials-injury-des-brand.trycloudflare.com']
 CSRF_TRUSTED_ORIGINS = ['http://127.0.0.1:8001', 'http://localhost:8001']
 
 # This is a safer way to get and parse the hostname from Railway.

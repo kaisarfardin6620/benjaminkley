@@ -1,26 +1,6 @@
-# compose.yaml (FINAL VERSION)
+# compose.yaml (MINIMAL - Django only)
 
 services:
-  # The Redis service (no changes)
-  redis:
-    image: "redis:alpine"
-    container_name: benjaminkley-redis
-    networks:
-      - app-network
-
-  # The PostgreSQL Database service (no changes)
-  db:
-    image: "postgres:15-alpine"
-    container_name: benjaminkley-db
-    volumes:
-      - postgres_data:/var/lib/postgresql/data/
-    environment:
-      - POSTGRES_DB=benjaminkley_db
-      - POSTG-RES_USER=benjaminkley_user
-      - POSTGRES_PASSWORD=a_strong_password_here
-    networks:
-      - app-network
-
   # Your Django Application Service
   app:
     build: .
@@ -29,24 +9,22 @@ services:
       - "8001:8000" # Maps port 8000 inside the container to 8001 on your PC
     volumes:
       - .:/app
+    env_file:
+      - .env  # This will load your .env file with Railway credentials
     environment:
-      - SECRET_KEY=a_different_dev_secret_key
-      - DEBUG=True
-      - DATABASE_URL=postgres://benjaminkley_user:a_strong_password_here@db:5432/benjaminkley_db
-      - REDIS_URL=redis://redis:6379/0
-      - EMAIL_HOST_USER=your_email@gmail.com
-      - EMAIL_HOST_PASSWORD=your_gmail_app_password
-      # --- THIS IS THE IMPORTANT PART ---
-      # We explicitly set the PORT for the Gunicorn process inside the container.
       - PORT=8000
-    depends_on:
-      - db
-      - redis
+      - DEBUG=True
+      - TZ=UTC
+      - MPLCONFIGDIR=/tmp/matplotlib
+      - HOME=/tmp
     networks:
       - app-network
-
-volumes:
-  postgres_data:
+    command: >
+      sh -c "mkdir -p /tmp/matplotlib &&
+             . /opt/venv/bin/activate &&
+             python manage.py migrate --no-input &&
+             python manage.py collectstatic --no-input --clear &&
+             gunicorn benjaminkley.wsgi --bind 0.0.0.0:8000 --timeout 120 --workers 2 --max-requests 1000"
 
 networks:
   app-network:
