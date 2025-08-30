@@ -1,3 +1,5 @@
+# authentication/serializers.py
+
 import re
 import hashlib
 import requests
@@ -43,7 +45,7 @@ class SignupSerializer(serializers.Serializer):
     role = serializers.CharField(max_length=255, required=True)
     clinic_name = serializers.CharField(max_length=255, required=True)
     date_of_birth = serializers.DateField(required=True, input_formats=['%m-%d-%Y'])
-    contact_number = serializers.CharField(max_length=20, required=True)
+    contact_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     address = serializers.CharField(max_length=255, required=True)
 
     def validate(self, data):
@@ -57,6 +59,11 @@ class SignupSerializer(serializers.Serializer):
         return data
 
     def create(self, validated_data):
+        """
+        This method is now robust and works with the post_save signal.
+        """
+        # Step 1: Create the User object. This will trigger the signal,
+        # which in turn creates a basic UserProfile with default values.
         user = User.objects.create_user(
             username=validated_data['email'],
             email=validated_data['email'],
@@ -65,15 +72,27 @@ class SignupSerializer(serializers.Serializer):
             last_name=validated_data.get('last_name'),
             is_active=False
         )
-        UserProfile.objects.create(
-            user=user,
-            profile_picture=validated_data.get('profile_picture'),
-            role=validated_data.get('role'),
-            clinic_name=validated_data.get('clinic_name'),
-            date_of_birth=validated_data.get('date_of_birth'),
-            contact_number=validated_data.get('contact_number'),
-            address=validated_data.get('address')
-        )
+
+        # --- START OF THE DEFINITIVE FIX ---
+        # Step 2: The signal has created the profile. Now, we get that profile
+        # and UPDATE it with the detailed information from the signup form.
+        
+        # We can safely assume the profile exists because of the signal.
+        profile = user.profile
+        
+        # Update the profile with the data from the form
+        profile.role = validated_data.get('role', profile.role)
+        profile.clinic_name = validated_data.get('clinic_name', profile.clinic_name)
+        profile.date_of_birth = validated_data.get('date_of_birth', profile.date_of_birth)
+        profile.contact_number = validated_data.get('contact_number', profile.contact_number)
+        profile.address = validated_data.get('address', profile.address)
+        
+        # Handle the optional profile picture
+        profile.profile_picture = validated_data.get('profile_picture', profile.profile_picture)
+        
+        profile.save()
+        # --- END OF THE DEFINITIVE FIX ---
+
         return user
 
 class OTPVerificationSerializer(serializers.Serializer):
@@ -115,26 +134,38 @@ class ProfileSerializer(serializers.ModelSerializer):
         model = UserProfile
         fields = ['first_name', 'last_name', 'email', 'profile_picture', 'role', 'clinic_name', 'date_of_birth', 'contact_number', 'address', 'status']
 
-class UpdateProfileSerializer(serializers.ModelSerializer):
-    first_name = serializers.CharField(source='user.first_name', required=False)
-    date_of_birth = serializers.DateField(required=False, input_formats=['%m-%d-%Y'])
+class UpdateProfileSerializer(serializers.Serializer):
+    full_name = serializers.CharField(required=False, write_only=True)
+    role = serializers.CharField(required=False)
+    clinic_name = serializers.CharField(required=False)
+    date_of_birth = serializers.DateField(required=False)
+    address = serializers.CharField(required=False)
 
-    class Meta:
-        model = UserProfile
-        fields = ['first_name', 'role', 'clinic_name', 'date_of_birth', 'address']
+    def validate_role(self, value):
+        if value not in ['Admin', 'User', 'Staff']:  # Example roles, adjust as needed
+            raise serializers.ValidationError("Invalid role.")
+        return value
 
     def update(self, instance, validated_data):
-        user = instance.user
-        
-        user_data = validated_data.get('user', {})
-        user.first_name = user_data.get('first_name', user.first_name)
-        user.save()
+        profile = instance.profile
 
-        instance.role = validated_data.get('role', instance.role)
-        instance.clinic_name = validated_data.get('clinic_name', instance.clinic_name)
-        instance.date_of_birth = validated_data.get('date_of_birth', instance.date_of_birth)
-        instance.address = validated_data.get('address', instance.address)
-        instance.save()
+        # Update user fields (full name)
+        if 'full_name' in validated_data:
+            full_name = validated_data['full_name'].strip()
+            parts = full_name.split(' ', 1)
+            instance.first_name = parts[0]
+            instance.last_name = parts[1] if len(parts) > 1 else ''
+        if 'role' in validated_data:
+            profile.role = validated_data['role']
+        if 'clinic_name' in validated_data:
+            profile.clinic_name = validated_data['clinic_name']
+        if 'date_of_birth' in validated_data:
+            profile.date_of_birth = validated_data['date_of_birth']
+        if 'address' in validated_data:
+            profile.address = validated_data['address']
+
+        instance.save()  # Save the user instance
+        profile.save()   # Save the profile instance with the new data
         
         return instance
 

@@ -1,5 +1,3 @@
-# benjaminkley/settings.py
-
 from pathlib import Path
 from datetime import timedelta
 import os
@@ -17,27 +15,21 @@ if not SECRET_KEY:
     raise ValueError("No SECRET_KEY set. Please create a .env file.")
 
 # DEBUG mode is controlled by an environment variable.
-# It will be 'False' in production (Railway/AWS) by default.
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 
-# --- HOSTING & SECURITY ---
+ROOT_URLCONF = 'benjaminkley.urls'
 
-# --- ALLOWED HOSTS for Railway ---
-ALLOWED_HOSTS = [
-    '127.0.0.1',
-    'localhost',
-    'benjaminkley-production.up.railway.app',
-]
+# --- HOSTING & SECURITY ---
+ALLOWED_HOSTS = ['*']
 CSRF_TRUSTED_ORIGINS = [
-    'http://127.0.0.1:8080',
-    'http://localhost:8080',
-    'https://benjaminkley-production.up.railway.app',
+    'http://127.0.0.1:8001',  # For local testing
+    'http://localhost:8001',   # For local testing
+    'http://103.186.20.114:8001',  # For local testing
 ]
 
 # --- SECURE PROXY SSL HEADER for Nginx/Proxy ---
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-
 
 # --- APPLICATIONS & MIDDLEWARE ---
 INSTALLED_APPS = [
@@ -48,22 +40,21 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    # Third-party apps
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
     'phonenumber_field', # For international phone number validation
-    # Your apps
     'authentication',
     'contact_support',
     'scans',
     'dashboard',
+    'django_celery_beat',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',   
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -72,14 +63,9 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'benjaminkley.urls'
-WSGI_APPLICATION = 'benjaminkley.wsgi.application'
-
 # --- DATABASE CONFIGURATION (FLEXIBLE) ---
 DATABASES = {
     'default': dj_database_url.config(
-        # In production (Railway), it uses the DATABASE_URL env variable.
-        # Locally, if DATABASE_URL is not in your .env, it falls back to SQLite.
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
         conn_max_age=600,
         conn_health_checks=True,
@@ -87,13 +73,11 @@ DATABASES = {
 }
 
 # --- STATIC & MEDIA FILES ---
-
-# --- STATIC & MEDIA FILES (for Docker/Nginx) ---
 AI_MODELS_DIR = BASE_DIR / 'ai_models'
 STATIC_URL = '/static/'
-STATIC_ROOT = '/app/staticfiles'
+STATIC_ROOT = BASE_DIR / 'staticfiles'  # Local development
 MEDIA_URL = '/media/'
-MEDIA_ROOT = '/app/media'
+MEDIA_ROOT = BASE_DIR / 'media'  # Local development
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # --- CELERY AND REDIS CONFIGURATION (FLEXIBLE) ---

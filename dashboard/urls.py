@@ -1,4 +1,3 @@
-# dashboard/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import *
@@ -15,5 +14,6 @@ urlpatterns = [
     path('stats/', DashboardStatsAPIView.as_view(), name='dashboard-stats'),
     path('charts/user-overview/', UserOverviewChartAPIView.as_view(), name='chart-user-overview'),
     path('charts/scanner-overview/', ScannerOverviewChartAPIView.as_view(), name='chart-scanner-overview'),
+    path('settings/profile/', AdminProfileView.as_view(), name='admin-profile'),
     path('', include(router.urls)),
 ]

@@ -9,6 +9,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework.parsers import MultiPartParser, FormParser
 from .models import AuthToken, UserProfile, PasswordHistory
 from .serializers import (
     SignupSerializer, OTPVerificationSerializer, ChangePasswordSerializer, 
@@ -36,6 +37,8 @@ def send_otp_email(user, otp, purpose="account verification"):
 
 class UserSignupAPIView(APIView):
     permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
     def post(self, request):
         serializer = SignupSerializer(data=request.data)
         if serializer.is_valid():
@@ -111,27 +114,60 @@ class UserLogoutAPIView(APIView):
 class UserProfileAPIView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):
-        profile = UserProfile.objects.get(user=request.user)
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
         serializer = ProfileSerializer(profile)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 class UpdateProfileAPIView(APIView):
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]  # For handling file uploads if needed
+
     def put(self, request):
-        profile = request.user.profile
-        serializer = UpdateProfileSerializer(profile, data=request.data, partial=True)
+        # Get or create the user profile
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+
+        # Use the serializer to update user details (name, role, clinic_name, dob, address)
+        serializer = UpdateProfileSerializer(
+            instance=request.user,  # Pass user instance
+            data=request.data,
+            partial=True,  # Allow partial updates (not all fields required)
+            context={'request': request}
+        )
+
         if serializer.is_valid():
-            serializer.save()
+            # Save the user instance (the base user details like first_name, last_name, email)
+            instance = serializer.save()
+
+            # Now update the profile fields (role, clinic_name, dob, address)
+            profile.role = request.data.get('role', profile.role)
+            profile.clinic_name = request.data.get('clinic_name', profile.clinic_name)
+            profile.date_of_birth = request.data.get('date_of_birth', profile.date_of_birth)
+            profile.address = request.data.get('address', profile.address)
+            profile.save()  # Save the updated profile
+
             return Response(ProfileSerializer(profile).data, status=status.HTTP_200_OK)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class ProfilePictureUploadAPIView(APIView):
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]  # For handling file uploads
+
     def post(self, request):
-        serializer = ProfilePictureSerializer(request.user.profile, data=request.data)
+        # Get or create the user profile
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+
+        # Use the ProfilePictureSerializer to validate and save the file
+        serializer = ProfilePictureSerializer(instance=profile, data=request.data, partial=True)
+
         if serializer.is_valid():
-            serializer.save()
-            return Response({'message': 'Profile picture updated successfully.'}, status=status.HTTP_200_OK)
+            # Update the profile picture
+            profile.profile_picture = serializer.validated_data.get('profile_picture')
+            profile.save()  # Save the profile with the new picture
+
+            # Return the updated profile data in response
+            return Response(ProfileSerializer(profile).data, status=status.HTTP_200_OK)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class ChangePasswordAPIView(APIView):
@@ -146,8 +182,8 @@ class ChangePasswordAPIView(APIView):
             PasswordHistory.objects.create(user=user, hashed_password=user.password)
             return Response({'message': 'Password changed successfully.'}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 class PasswordResetRequestOTPView(APIView):
-    """STEP 1: User provides email to request a password reset OTP."""
     permission_classes = [AllowAny]
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
@@ -170,7 +206,6 @@ class VerifyPasswordResetOTPView(APIView):
         serializer = PasswordResetVerifyOTPSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         otp = serializer.validated_data['otp']
-
         try:
             token = AuthToken.objects.get(
                 otp_code=otp, token_type='password_reset_otp', 
@@ -178,12 +213,9 @@ class VerifyPasswordResetOTPView(APIView):
             )
         except AuthToken.DoesNotExist:
             return Response({'error': 'Invalid or expired OTP.'}, status=status.HTTP_400_BAD_REQUEST)
-
         token.is_used = True
         token.save()
-
         change_ticket = AuthToken.objects.create(user=token.user, token_type='password_change_ticket')
-        
         return Response({
             'message': 'OTP verified successfully.',
             'password_change_ticket': change_ticket.token
@@ -194,10 +226,8 @@ class SetNewPasswordView(APIView):
     def post(self, request):
         serializer = SetNewPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-            
         ticket = serializer.validated_data['password_change_ticket']
         new_password = serializer.validated_data['new_password']
-
         try:
             verified_token = AuthToken.objects.get(
                 token=ticket, token_type='password_change_ticket',
@@ -205,40 +235,29 @@ class SetNewPasswordView(APIView):
             )
         except AuthToken.DoesNotExist:
             return Response({'error': 'Invalid or expired password change session. Please start over.'}, status=status.HTTP_400_BAD_REQUEST)
-        
         user = verified_token.user
-        
-        recent_passwords = PasswordHistory.objects.filter(user=user).order_by('-created_at')[:10].values_list('hashed_password', flat=True)
-        for hashed_password in recent_passwords:
-            if check_password(new_password, hashed_password):
+        for history in PasswordHistory.objects.filter(user=user).order_by('-created_at')[:10]:
+            if check_password(new_password, history.hashed_password):
                 return Response({'error': 'Cannot reuse a recent password.'}, status=status.HTTP_400_BAD_REQUEST)
-
         user.set_password(new_password)
         user.save()
         PasswordHistory.objects.create(user=user, hashed_password=user.password)
-        
         verified_token.is_used = True
         verified_token.save()
-        
         return Response({'message': 'Your password has been reset successfully.'}, status=status.HTTP_200_OK)
-    
 
 class DeleteUserAccountAPIView(APIView):
     permission_classes = [IsAuthenticated]
-
     def delete(self, request, *args, **kwargs):
         serializer = DeleteAccountSerializer(
             data=request.data,
             context={'request': request}
         )
-        
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
         user = request.user
         user.delete()
-
         return Response(
             {"message": "Your account has been permanently deleted."},
             status=status.HTTP_200_OK
-        )    
+        )

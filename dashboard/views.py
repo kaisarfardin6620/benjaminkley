@@ -1,14 +1,13 @@
-# dashboard/views.py
 from rest_framework import viewsets, filters, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
 from rest_framework.decorators import action
+from rest_framework.parsers import MultiPartParser, FormParser
 from django.contrib.auth.models import User
 from django.db.models.functions import TruncMonth
 from django.db.models import Count
 import calendar
-
 from .serializers import *
 from authentication.models import UserProfile
 from scans.models import Scan
@@ -98,3 +97,26 @@ class SiteContentViewSet(viewsets.ModelViewSet):
     serializer_class = SiteContentSerializer
     queryset = SiteContent.objects.all()
     lookup_field = 'slug'
+
+class AdminProfileView(APIView):
+    permission_classes = [IsAdminUser]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get(self, request):
+        UserProfile.objects.get_or_create(user=request.user)
+        serializer = AdminProfileSerializer(request.user)
+        return Response(serializer.data)
+
+    def put(self, request):
+        profile = request.user.profile
+        
+        serializer = AdminUpdateProfileSerializer(
+            instance=profile, 
+            data=request.data,
+            partial=True,
+            context={'request': request}
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return Response(AdminProfileSerializer(request.user).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

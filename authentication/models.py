@@ -12,7 +12,7 @@ class UserProfile(models.Model):
     role = models.CharField(max_length=255)
     clinic_name = models.CharField(max_length=255)
     date_of_birth = models.DateField()
-    contact_number = PhoneNumberField(region=None)
+    contact_number = PhoneNumberField(region=None, blank=True, null=True)
     status = models.CharField(max_length=50, default='Pending')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
