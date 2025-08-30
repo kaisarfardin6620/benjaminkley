@@ -24,7 +24,8 @@ ROOT_URLCONF = 'benjaminkley.urls'
 ALLOWED_HOSTS = [
     '127.0.0.1',  # For local development
     'localhost',  # For local development
-    'benjaminkley-production.up.railway.app',  # Railway production URL
+    'benjaminkley-app',  # Add this for internal Docker communication
+    'benjaminkley-production.up.railway.app',  # Your Railway URL
 ]
 
 
