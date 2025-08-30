@@ -21,11 +21,17 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 ROOT_URLCONF = 'benjaminkley.urls'
 
 # --- HOSTING & SECURITY ---
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = [
+    '127.0.0.1',  # For local development
+    'localhost',  # For local development
+    'benjaminkley-production.up.railway.app',  # Railway production URL
+]
+
+
 CSRF_TRUSTED_ORIGINS = [
-    'http://127.0.0.1:8001',  # For local testing
-    'http://localhost:8001',   # For local testing
-    'http://103.186.20.114:8001',  # For local testing
+    'http://127.0.0.1:8000',  # For local development
+    'http://localhost:8000',   # For local development
+    'https://benjaminkley-production.up.railway.app',  # Railway production URL
 ]
 
 # --- SECURE PROXY SSL HEADER for Nginx/Proxy ---
