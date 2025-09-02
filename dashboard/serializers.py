@@ -20,6 +20,27 @@ class DashboardUserSerializer(serializers.ModelSerializer):
     def get_number_of_scan(self, obj):
         return obj.scans.count()
 
+    # --- THIS IS THE FIX ---
+    # This custom update method tells the serializer how to correctly save the 'status'
+    # field to the related UserProfile model, fixing the 500 error.
+    def update(self, instance, validated_data):
+        # When using `source=`, DRF nests the data. We pop the 'profile' data dictionary.
+        profile_data = validated_data.pop('profile', {})
+        status = profile_data.get('status')
+
+        # Get the related UserProfile instance
+        profile = instance.profile
+
+        # Update the UserProfile status if it was provided in the request
+        if status is not None:
+            profile.status = status
+            profile.save()
+
+        # Let the parent ModelSerializer's update method handle the standard User fields
+        # (like first_name, last_name, email).
+        return super().update(instance, validated_data)
+
+
 class DashboardScanSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source='user.get_full_name', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)

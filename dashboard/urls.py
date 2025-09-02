@@ -17,9 +17,6 @@ urlpatterns = [
     path('charts/user-overview/', UserOverviewChartAPIView.as_view(), name='chart-user-overview'),
     path('charts/scanner-overview/', ScannerOverviewChartAPIView.as_view(), name='chart-scanner-overview'),
     path('settings/profile/', AdminProfileView.as_view(), name='admin-profile'),
-    
-    # --- THIS IS THE FIX ---
-    # The URL for the new password change view has been added.
     path('settings/change-password/', AdminChangePasswordView.as_view(), name='admin-change-password'),
     
     path('', include(router.urls)),
