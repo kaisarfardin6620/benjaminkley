@@ -22,17 +22,19 @@ ROOT_URLCONF = 'benjaminkley.urls'
 
 # --- HOSTING & SECURITY ---
 ALLOWED_HOSTS = [
-    '127.0.0.1',  # For local development
-    'localhost',  # For local development
-    'benjaminkley-app',  # Add this for internal Docker communication
-    'benjaminkley-production.up.railway.app',  # Your Railway URL
+    '127.0.0.1',
+    'localhost',
+    'benjaminkley-app',
+    'benjaminkley-production.up.railway.app',
 ]
 
 
 CSRF_TRUSTED_ORIGINS = [
-    'http://127.0.0.1:8000',  # For local development
-    'http://localhost:8000',   # For local development
-    'https://benjaminkley-production.up.railway.app',  # Railway production URL
+    'http://127.0.0.1:8000',
+    'http://localhost:8000',
+    'http://127.0.0.1:8080',
+    'http://localhost:8080',
+    'https://benjaminkley-production.up.railway.app',
 ]
 
 # --- SECURE PROXY SSL HEADER for Nginx/Proxy ---
@@ -56,12 +58,13 @@ INSTALLED_APPS = [
     'scans',
     'dashboard',
     'django_celery_beat',
+    'core',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
+    # 'whitenoise.middleware.WhiteNoiseMiddleware',  # Remove if nginx serves static files
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -82,10 +85,10 @@ DATABASES = {
 # --- STATIC & MEDIA FILES ---
 AI_MODELS_DIR = BASE_DIR / 'ai_models'
 STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'  # Local development
+STATIC_ROOT = '/app/staticfiles'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'  # Local development
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
 
 # --- CELERY AND REDIS CONFIGURATION (FLEXIBLE) ---
 CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/0')
@@ -127,10 +130,24 @@ USE_TZ = True
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # --- DJANGO REST FRAMEWORK ---
+# --- THIS IS THE FIX ---
+# This entire dictionary is replaced to activate your custom renderer globally.
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': ('rest_framework_simplejwt.authentication.JWTAuthentication',),
-    'DEFAULT_THROTTLE_CLASSES': ['rest_framework.throttling.AnonRateThrottle', 'rest_framework.throttling.UserRateThrottle'],
-    'DEFAULT_THROTTLE_RATES': {'anon': '100/day', 'user': '1000/day'}
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle'
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/day',
+        'user': '1000/day'
+    },
+    # This is the crucial part that activates your custom renderer for all APIs.
+    'DEFAULT_RENDERER_CLASSES': [
+        'core.renderers.CustomJSONRenderer',
+        # We keep the browsable API renderer for development and debugging in the browser.
+        'rest_framework.renderers.BrowsableAPIRenderer',
+    ]
 }
 
 # --- SIMPLE JWT ---

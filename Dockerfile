@@ -23,6 +23,7 @@ ENV PYTHONDONTWRITEBYTECODE 1
 RUN apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 && rm -rf /var/lib/apt/lists/*
 RUN addgroup --system app && adduser --system --group app
 WORKDIR /app
+RUN mkdir -p /app/staticfiles && chown -R app:app /app/staticfiles
 COPY --from=builder /opt/venv /opt/venv
 COPY . .
 

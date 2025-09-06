@@ -9,6 +9,7 @@ from django.contrib.auth.hashers import check_password
 from rest_framework import serializers
 from .models import UserProfile, PasswordHistory
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from django.urls import reverse
 
 
 class PasswordValidator:
@@ -59,11 +60,6 @@ class SignupSerializer(serializers.Serializer):
         return data
 
     def create(self, validated_data):
-        """
-        This method is now robust and works with the post_save signal.
-        """
-        # Step 1: Create the User object. This will trigger the signal,
-        # which in turn creates a basic UserProfile with default values.
         user = User.objects.create_user(
             username=validated_data['email'],
             email=validated_data['email'],
@@ -73,25 +69,15 @@ class SignupSerializer(serializers.Serializer):
             is_active=False
         )
 
-        # --- START OF THE DEFINITIVE FIX ---
-        # Step 2: The signal has created the profile. Now, we get that profile
-        # and UPDATE it with the detailed information from the signup form.
-        
-        # We can safely assume the profile exists because of the signal.
         profile = user.profile
-        
-        # Update the profile with the data from the form
         profile.role = validated_data.get('role', profile.role)
         profile.clinic_name = validated_data.get('clinic_name', profile.clinic_name)
         profile.date_of_birth = validated_data.get('date_of_birth', profile.date_of_birth)
         profile.contact_number = validated_data.get('contact_number', profile.contact_number)
         profile.address = validated_data.get('address', profile.address)
-        
-        # Handle the optional profile picture
         profile.profile_picture = validated_data.get('profile_picture', profile.profile_picture)
         
         profile.save()
-        # --- END OF THE DEFINITIVE FIX ---
 
         return user
 
@@ -142,14 +128,13 @@ class UpdateProfileSerializer(serializers.Serializer):
     address = serializers.CharField(required=False)
 
     def validate_role(self, value):
-        if value not in ['Admin', 'User', 'Staff']:  # Example roles, adjust as needed
+        if value not in ['Admin', 'User', 'Staff']:  
             raise serializers.ValidationError("Invalid role.")
         return value
 
     def update(self, instance, validated_data):
         profile = instance.profile
 
-        # Update user fields (full name)
         if 'full_name' in validated_data:
             full_name = validated_data['full_name'].strip()
             parts = full_name.split(' ', 1)
@@ -164,8 +149,8 @@ class UpdateProfileSerializer(serializers.Serializer):
         if 'address' in validated_data:
             profile.address = validated_data['address']
 
-        instance.save()  # Save the user instance
-        profile.save()   # Save the profile instance with the new data
+        instance.save()  
+        profile.save()   
         
         return instance
 
@@ -183,6 +168,26 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         token = super().get_token(user)
         token['username'] = user.username
         return token
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+
+        user = self.user
+        
+        response_payload = {
+            'custom_meta': {
+                "message": "Successfully Logged in."
+            },
+            "user": {
+                "id": user.pk,
+                "email": user.email,
+                "role": "ADMIN" if user.is_staff else user.profile.role
+            },
+            "token": data['access'],
+            "refresh_token": data['refresh']
+        }
+        
+        return response_payload
 
 class LogoutSerializer(serializers.Serializer):
     refresh = serializers.CharField()

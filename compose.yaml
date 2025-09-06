@@ -7,12 +7,23 @@ services:
     env_file: .env
     networks:
       - app-network
+    # It's highly recommended to keep the healthcheck for stability
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: "redis:alpine"
     container_name: benjaminkley-redis
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   app:
     build: .
@@ -20,6 +31,10 @@ services:
     ports:
       - "8000:8000"
     volumes:
+      # --- THIS IS THE FIX ---
+      # This new line creates a two-way sync between your local project folder
+      # and the container's /app folder. It must be listed first.
+      - .:/app
       - staticfiles:/app/staticfiles
       - media_volume:/app/media
     env_file: .env
@@ -28,33 +43,45 @@ services:
     networks:
       - app-network
     command: ["/app/docker-entrypoint.sh", "web"]
+    # Using the healthcheck condition is more robust than a simple depends_on
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   celery:
     build: .
     container_name: benjaminkley-celery
     volumes:
+      # Also add the code sync here so your workers always have the latest tasks.py
+      - .:/app
       - media_volume:/app/media
     env_file: .env
     networks:
       - app-network
     command: ["/app/docker-entrypoint.sh", "worker"]
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   celery-beat:
     build: .
     container_name: benjaminkley-celery-beat
+    volumes:
+      # Also add the code sync here
+      - .:/app
     env_file: .env
     networks:
       - app-network
     command: ["/app/docker-entrypoint.sh", "beat"]
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   nginx:
     image: nginx:1.25
