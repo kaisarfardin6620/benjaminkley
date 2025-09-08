@@ -1,28 +1,7 @@
 services:
-  db:
-    image: "postgres:15-alpine"
-    container_name: benjaminkley-db
-    volumes:
-      - postgres_data:/var/lib/postgresql/data/
-    env_file: .env
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: "redis:alpine"
-    container_name: benjaminkley-redis
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # --- THE FIX ---
+  # The 'db' and 'redis' services have been completely REMOVED.
+  # Your app will connect to the remote Railway services defined in your .env file.
 
   app:
     build: .
@@ -30,7 +9,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - .:/app  # For local development code syncing
+      - .:/app
       - staticfiles:/app/staticfiles
       - media_volume:/app/media
     env_file: .env
@@ -39,11 +18,7 @@ services:
     networks:
       - app-network
     command: ["/app/docker-entrypoint.sh", "web"]
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    # The 'depends_on' key is removed because the local db/redis containers are gone.
 
   celery:
     build: .
@@ -55,11 +30,6 @@ services:
     networks:
       - app-network
     command: ["/app/docker-entrypoint.sh", "worker"]
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
 
   celery-beat:
     build: .
@@ -70,11 +40,6 @@ services:
     networks:
       - app-network
     command: ["/app/docker-entrypoint.sh", "beat"]
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
 
   nginx:
     image: nginx:1.25
@@ -96,6 +61,8 @@ networks:
     driver: bridge
 
 volumes:
+  # These volumes are still needed for static and media files if you don't use S3
+  # It's safe to leave them here.
   postgres_data:
   staticfiles:
   media_volume:

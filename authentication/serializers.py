@@ -7,11 +7,16 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.auth.hashers import check_password
 from rest_framework import serializers
-from .models import UserProfile, PasswordHistory
+from .models import UserProfile, PasswordHistory, Roles
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.urls import reverse
 
-
+class RoleChoiceField(serializers.ChoiceField):
+    def to_internal_value(self, data):
+        for key, value in self._choices.items():
+            if value == data:
+                return key
+        self.fail('invalid_choice', input=data)
 class PasswordValidator:
     @staticmethod
     def validate_breached_password(password):
@@ -43,7 +48,7 @@ class SignupSerializer(serializers.Serializer):
     first_name = serializers.CharField(max_length=255, required=True)
     last_name = serializers.CharField(max_length=255, required=True)
     profile_picture = serializers.ImageField(required=False, allow_null=True)
-    role = serializers.CharField(max_length=255, required=True)
+    role = RoleChoiceField(choices=Roles.choices)
     clinic_name = serializers.CharField(max_length=255, required=True)
     date_of_birth = serializers.DateField(required=True, input_formats=['%m-%d-%Y'])
     contact_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -115,22 +120,20 @@ class ProfileSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(source='user.first_name')
     last_name = serializers.CharField(source='user.last_name')
     email = serializers.EmailField(source='user.email', read_only=True)
-    
+    profile_picture = serializers.ImageField(use_url=True, read_only=True)
+
     class Meta:
         model = UserProfile
-        fields = ['first_name', 'last_name', 'email', 'profile_picture', 'role', 'clinic_name', 'date_of_birth', 'contact_number', 'address', 'status']
-
+        fields = [
+            'first_name', 'last_name', 'email', 'profile_picture', 'role',
+            'clinic_name', 'date_of_birth', 'contact_number', 'address', 'status'
+        ]
 class UpdateProfileSerializer(serializers.Serializer):
     full_name = serializers.CharField(required=False, write_only=True)
-    role = serializers.CharField(required=False)
+    role = RoleChoiceField(choices=Roles.choices, required=False)
     clinic_name = serializers.CharField(required=False)
     date_of_birth = serializers.DateField(required=False)
     address = serializers.CharField(required=False)
-
-    def validate_role(self, value):
-        if value not in ['Admin', 'User', 'Staff']:  
-            raise serializers.ValidationError("Invalid role.")
-        return value
 
     def update(self, instance, validated_data):
         profile = instance.profile
@@ -170,11 +173,23 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
 
     def validate(self, attrs):
+        username = attrs.get('username')
+        password = attrs.get('password')
+
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            raise serializers.ValidationError('You have entered a wrong username.')
+
+        if not user.check_password(password):
+            raise serializers.ValidationError('Incorrect password.')
+        
+        if not user.is_active:
+             raise serializers.ValidationError('This account is not active. Please verify your email first.')
+
         data = super().validate(attrs)
 
-        user = self.user
-        
-        response_payload = {
+        structured_response = {
             'custom_meta': {
                 "message": "Successfully Logged in."
             },
@@ -187,7 +202,7 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
             "refresh_token": data['refresh']
         }
         
-        return response_payload
+        return structured_response
 
 class LogoutSerializer(serializers.Serializer):
     refresh = serializers.CharField()

@@ -6,10 +6,18 @@ from phonenumber_field.modelfields import PhoneNumberField
 
 import uuid
 
+class Roles(models.TextChoices):
+    ADMIN = 'ADMIN', 'Admin'
+    DOCTOR = 'DOCTOR', 'Doctor'
+    PROVIDER = 'PROVIDER', 'Provider'
+    CLIENT = 'CLIENT', 'Client'
+    STAFF = 'STAFF', 'Staff'
+    CLINIC = 'CLINIC', 'Clinic'
+    PRIVATE_USER = 'PRIVATE_USER', 'Private User'
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     profile_picture = models.ImageField(upload_to='profile_pics/', blank=True, null=True)
-    role = models.CharField(max_length=255)
+    role = models.CharField(max_length=50, choices=Roles.choices, default=Roles.CLIENT)
     clinic_name = models.CharField(max_length=255)
     date_of_birth = models.DateField()
     contact_number = PhoneNumberField(region=None, blank=True, null=True)
