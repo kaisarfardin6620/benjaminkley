@@ -1,31 +1,4 @@
 services:
-  db:
-    image: "postgres:15-alpine"
-    container_name: benjaminkley-db
-    volumes:
-      - postgres_data:/var/lib/postgresql/data/
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: "redis:alpine"
-    container_name: benjaminkley-redis
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   app:
     build: .
@@ -34,43 +7,32 @@ services:
       - "8000:8000"
     volumes:
       - .:/app
-      - /home/fkaisar/ai_models:/app/ai_models:ro
       - staticfiles:/app/staticfiles
       - media_volume:/app/media
     env_file: .env
     environment:
       - PORT=8000
+      - USE_S3_STORAGE=True
     networks:
       - app-network
-    # --- THIS IS THE FIX (Part 1) ---
-    # This forces the container to use a reliable public DNS for internet access.
     dns:
       - 8.8.8.8
     command: ["/app/docker-entrypoint.sh", "web"]
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
 
   celery:
     build: .
     container_name: benjaminkley-celery
     volumes:
       - .:/app
-      - /home/fkaisar/ai_models:/app/ai_models:ro
       - media_volume:/app/media
     env_file: .env
+    environment:
+      - USE_S3_STORAGE=True
     networks:
       - app-network
     dns:
       - 8.8.8.8
     command: ["/app/docker-entrypoint.sh", "worker"]
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
 
   celery-beat:
     build: .
@@ -83,11 +45,6 @@ services:
     dns:
       - 8.8.8.8
     command: ["/app/docker-entrypoint.sh", "beat"]
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
 
   nginx:
     image: nginx:1.25
@@ -109,6 +66,5 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data:
   staticfiles:
   media_volume:

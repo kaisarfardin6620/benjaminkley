@@ -1,3 +1,5 @@
+# Dockerfile
+
 # --- Stage 1: Builder ---
 FROM python:3.12-slim AS builder
 ENV PYTHONUNBUFFERED 1
@@ -28,10 +30,12 @@ COPY . .
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
-# Create directories and set correct ownership before switching user
+# --- THIS IS THE FIX ---
+# We create the directories and set the correct ownership BEFORE switching to the app user.
+# This ensures the 'app' user can write to the media and staticfiles volumes.
 RUN mkdir -p /app/media /app/staticfiles && chown -R app:app /app/media /app/staticfiles
 
-# Change ownership of the application code
+# Change ownership of the application code itself
 RUN chown -R app:app /app
 
 # Switch to the non-root user for security

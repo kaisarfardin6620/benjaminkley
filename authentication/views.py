@@ -151,25 +151,20 @@ class UpdateProfileAPIView(APIView):
 
 class ProfilePictureUploadAPIView(APIView):
     permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]  # For handling file uploads
+    parser_classes = [MultiPartParser, FormParser]
 
-    def post(self, request):
-        # Get or create the user profile
+    def post(self, request, *args, **kwargs):
         profile, _ = UserProfile.objects.get_or_create(user=request.user)
 
-        # Use the ProfilePictureSerializer to validate and save the file
-        serializer = ProfilePictureSerializer(instance=profile, data=request.data, partial=True)
+        serializer = ProfilePictureSerializer(instance=profile, data=request.data)
 
         if serializer.is_valid():
-            # Update the profile picture
-            profile.profile_picture = serializer.validated_data.get('profile_picture')
-            profile.save()  # Save the profile with the new picture
+            serializer.save()
+            
+            return Response({"message": "Profile picture uploaded successfully."}, status=status.HTTP_200_OK)
 
-            # Return the updated profile data in response
-            return Response(ProfileSerializer(profile).data, status=status.HTTP_200_OK)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)     
+    
 class ChangePasswordAPIView(APIView):
     permission_classes = [IsAuthenticated]
     def post(self, request):
