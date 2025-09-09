@@ -1,7 +1,31 @@
 services:
-  # --- THE FIX ---
-  # The 'db' and 'redis' services have been completely REMOVED.
-  # Your app will connect to the remote Railway services defined in your .env file.
+  db:
+    image: "postgres:15-alpine"
+    container_name: benjaminkley-db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: "redis:alpine"
+    container_name: benjaminkley-redis
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   app:
     build: .
@@ -10,6 +34,7 @@ services:
       - "8000:8000"
     volumes:
       - .:/app
+      - /home/fkaisar/ai_models:/app/ai_models:ro
       - staticfiles:/app/staticfiles
       - media_volume:/app/media
     env_file: .env
@@ -17,19 +42,35 @@ services:
       - PORT=8000
     networks:
       - app-network
+    # --- THIS IS THE FIX (Part 1) ---
+    # This forces the container to use a reliable public DNS for internet access.
+    dns:
+      - 8.8.8.8
     command: ["/app/docker-entrypoint.sh", "web"]
-    # The 'depends_on' key is removed because the local db/redis containers are gone.
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   celery:
     build: .
     container_name: benjaminkley-celery
     volumes:
       - .:/app
+      - /home/fkaisar/ai_models:/app/ai_models:ro
       - media_volume:/app/media
     env_file: .env
     networks:
       - app-network
+    dns:
+      - 8.8.8.8
     command: ["/app/docker-entrypoint.sh", "worker"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   celery-beat:
     build: .
@@ -39,7 +80,14 @@ services:
     env_file: .env
     networks:
       - app-network
+    dns:
+      - 8.8.8.8
     command: ["/app/docker-entrypoint.sh", "beat"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   nginx:
     image: nginx:1.25
@@ -61,8 +109,6 @@ networks:
     driver: bridge
 
 volumes:
-  # These volumes are still needed for static and media files if you don't use S3
-  # It's safe to leave them here.
   postgres_data:
   staticfiles:
   media_volume:
