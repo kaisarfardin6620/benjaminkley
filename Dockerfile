@@ -20,26 +20,19 @@ RUN pip install --no-cache-dir -r requirements.txt
 FROM python:3.12-slim
 ENV PYTHONUNBUFFERED 1
 ENV PYTHONDONTWRITEBYTECODE 1
-RUN apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 && rm -rf /var/lib/apt/lists/*
+# --- THIS IS THE FIX ---
+# Install gosu for dropping privileges (Debian's equivalent of su-exec)
+RUN apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 gosu && rm -rf /var/lib/apt/lists/*
 RUN addgroup --system app && adduser --system --group app
 WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 COPY . .
 
-# Copy and make the script executable BEFORE changing user
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
-# --- THIS IS THE FIX ---
-# We create the directories and set the correct ownership BEFORE switching to the app user.
-# This ensures the 'app' user can write to the media and staticfiles volumes.
 RUN mkdir -p /app/media /app/staticfiles && chown -R app:app /app/media /app/staticfiles
-
-# Change ownership of the application code itself
 RUN chown -R app:app /app
-
-# Switch to the non-root user for security
-USER app
 
 EXPOSE 8000
 CMD ["/app/docker-entrypoint.sh", "web"]

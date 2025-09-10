@@ -1,20 +1,12 @@
 #!/bin/sh
-# docker-entrypoint.sh (FINAL, FLEXIBLE VERSION)
+# docker-entrypoint.sh
 
-# Exit immediately if a command exits with a non-zero status.
 set -e
 
-# Activate the virtual environment
 . /opt/venv/bin/activate
-
-# This is the "argument" passed to the script from compose.yaml
-# It will be 'web', 'worker', or 'beat'.
 COMMAND=$1
-
 echo "--- Received command: $COMMAND ---"
 
-# --- Run shared setup tasks ONLY on the 'web' process ---
-# This prevents workers from trying to run migrations at the same time.
 if [ "$COMMAND" = "web" ]; then
     echo "--- Running database migrations ---"
     python manage.py migrate --no-input
@@ -23,22 +15,23 @@ if [ "$COMMAND" = "web" ]; then
     python manage.py collectstatic --no-input --clear
 fi
 
-# --- Execute the specific command for this container ---
-# The 'exec' command replaces the shell process with the application process,
-# which is a Docker best practice for signal handling.
+echo "--- Ensuring correct permissions for scans output ---"
+mkdir -p /app/scans/outputs
+chown -R app:app /app/scans/outputs
 
+# --- THIS IS THE FIX ---
+# Use gosu to drop privileges and run the application as the 'app' user
 if [ "$COMMAND" = "web" ]; then
-    echo "--- Starting Gunicorn web server on port $PORT ---"
-    exec gunicorn benjaminkley.wsgi --bind 0.0.0.0:$PORT --timeout 120 --workers 3
+    echo "--- Starting Gunicorn web server as user 'app' ---"
+    exec gosu app gunicorn benjaminkley.wsgi --bind 0.0.0.0:$PORT --timeout 120 --workers 3
 
 elif [ "$COMMAND" = "worker" ]; then
-    echo "--- Starting Celery worker ---"
-    exec celery -A benjaminkley worker -l info
+    echo "--- Starting Celry worker as user 'app' ---"
+    exec gosu app celery -A benjaminkley worker -l info
 
 elif [ "$COMMAND" = "beat" ]; then
-    echo "--- Starting Celery beat scheduler ---"
-    # Note: Requires django-celery-beat to be installed
-    exec celery -A benjaminkley beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    echo "--- Starting Celery beat scheduler as user 'app' ---"
+    exec gosu app celery -A benjaminkley beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
 
 else
     echo "Unknown command: $COMMAND. Please use 'web', 'worker', or 'beat'."
