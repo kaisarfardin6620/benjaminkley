@@ -1,44 +1,22 @@
-# scans/tasks.py
-
 from celery import shared_task
 from .models import Scan
 from .processing.pipeline import run_full_scan_pipeline
 import traceback
 
 @shared_task
-def process_scan_task(scan_id: str):
-    """
-    The background task that runs the entire AI pipeline.
-    It handles success and failure and updates the database.
-    """
-    try:
-        scan = Scan.objects.get(id=scan_id)
-        
-        # Run the entire AI pipeline
-        results = run_full_scan_pipeline(scan)
-        
-        measurements = results.get('measurements', {})
-        reconstruction = results.get('reconstruction', {})
-        
-        # Save all measurements to the database (in cm)
-        for key, value in measurements.items():
-            if hasattr(scan, key):
-                setattr(scan, key, float(value) / 10.0)
-        
-        scan.processed_3d_model.name = reconstruction.get('output_model_relative_path')
-        scan.status = Scan.Status.COMPLETED
+def process_scan_and_save(scan_id):
+    print("--- RUNNING THE FINAL DIAGNOSTIC TASK ---")
 
-    except Exception as e:
-        # If anything goes wrong, mark the scan as FAILED
-        error_message = str(e)
-        print(f"CRITICAL ERROR processing scan {scan_id}: {error_message}")
-        traceback.print_exc()
-        
-        # It's important to re-fetch the object in the except block
-        scan = Scan.objects.get(id=scan_id)
-        scan.status = Scan.Status.FAILED
-        scan.failure_reason = error_message
+    scan = Scan.objects.get(id=scan_id)
     
-    finally:
-        # Always save the final state, whether success or failure
-        scan.save()
+    results = run_full_scan_pipeline(scan)
+    
+    measurements = results.get('measurements', {})
+    
+    for key, value in measurements.items():
+        if hasattr(scan, key) and value is not None:
+            setattr(scan, key, float(value) / 10.0) 
+    
+    scan.status = Scan.Status.COMPLETED
+    
+    scan.save()

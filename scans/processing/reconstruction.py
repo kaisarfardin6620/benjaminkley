@@ -1,33 +1,24 @@
 from django.conf import settings
-import os
-import shutil
 from pathlib import Path
 import trimesh
+import tempfile
+import os
 
 def reshape_model_to_match_photos(base_mesh, image_paths):
     print("--- Running Placeholder 3D Reshaping Logic ---")
-    reshaped_mesh = base_mesh
-    return reshaped_mesh
+    return base_mesh
 
-def generate_head_model(image_paths: dict, scan_id: str) -> dict:
-    gender = "Male" 
+def generate_head_model_locally(image_paths: dict, scan_id: str, gender: str) -> tuple[str, str]:
     base_heads_dir = Path(settings.AI_MODELS_DIR) / 'base_heads'
     base_model_path = base_heads_dir / ('female_head.obj' if gender == 'Female' else 'male_head.obj')
-
-    base_mesh = trimesh.load(base_model_path)
     
+    base_mesh = trimesh.load(str(base_model_path))
     newly_shaped_mesh = reshape_model_to_match_photos(base_mesh, image_paths)
     
-    media_root_path = Path(settings.MEDIA_ROOT)
-    output_dir = media_root_path / 'scans/outputs'
-    os.makedirs(output_dir, exist_ok=True)
-    output_model_filename = f"{scan_id}.obj"
-    output_model_absolute_path = output_dir / output_model_filename
+    temp_dir = tempfile.gettempdir()
+    output_filename = f"{scan_id}.obj"
+    local_temp_path = os.path.join(temp_dir, output_filename)
     
-    newly_shaped_mesh.export(str(output_model_absolute_path))
-
-    return {
-        "output_model_absolute_path": str(output_model_absolute_path),
-        "output_model_relative_path": f"scans/outputs/{output_model_filename}",
-        "gender": gender
-    }
+    newly_shaped_mesh.export(local_temp_path)
+            
+    return local_temp_path, output_filename

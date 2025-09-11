@@ -1,9 +1,6 @@
-# dashboard/views.py
-
 from rest_framework import viewsets, filters, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-# --- FIX: Added AllowAny for the public views ---
 from rest_framework.permissions import IsAdminUser, AllowAny
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -11,7 +8,6 @@ from django.contrib.auth.models import User
 from django.db.models.functions import TruncMonth
 from django.db.models import Count
 from django.utils import timezone
-# --- FIX: Added get_object_or_404 for convenience ---
 from django.shortcuts import get_object_or_404
 from datetime import timedelta
 import calendar
@@ -21,7 +17,6 @@ from scans.models import Scan
 from contact_support.models import ContactMessage
 from .models import *
 
-# --- No changes to any of the existing views below ---
 
 class DashboardStatsAPIView(APIView):
     permission_classes = [IsAdminUser]
@@ -73,7 +68,7 @@ class ScannerOverviewChartAPIView(APIView):
 class UserManagementViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     serializer_class = DashboardUserSerializer
-    queryset = User.objects.select_related('profile').prefetch_related('scans').all()
+    queryset = User.objects.select_related('profile').prefetch_related('scans').order_by('-date_joined')
     filter_backends = [filters.SearchFilter]
     search_fields = ['first_name', 'last_name', 'email']
     @action(detail=True, methods=['post'], url_path='block')
@@ -92,7 +87,7 @@ class UserManagementViewSet(viewsets.ModelViewSet):
 class ScanManagementViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     serializer_class = DashboardScanSerializer
-    queryset = Scan.objects.select_related('user').all()
+    queryset = Scan.objects.select_related('user').order_by('-created_at')
 
 class ContactMessageViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
@@ -112,7 +107,7 @@ class PushNotificationViewSet(viewsets.ModelViewSet):
 class AdminNotificationViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAdminUser]
     serializer_class = AdminNotificationSerializer
-    queryset = AdminNotification.objects.all()
+    queryset = AdminNotification.objects.all().order_by('-created_at')
     @action(detail=False, methods=['post'], url_path='mark-all-read')
     def mark_all_as_read(self, request):
         self.get_queryset().update(is_read=True)
@@ -121,7 +116,7 @@ class AdminNotificationViewSet(viewsets.ReadOnlyModelViewSet):
 class SiteContentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     serializer_class = SiteContentSerializer
-    queryset = SiteContent.objects.all()
+    queryset = SiteContent.objects.all().order_by('-updated_at')
     lookup_field = 'slug'
 
 class AdminProfileView(APIView):
@@ -134,7 +129,7 @@ class AdminProfileView(APIView):
     def put(self, request):
         profile = request.user.profile
         serializer = AdminUpdateProfileSerializer(
-            instance=profile, 
+            instance=profile,
             data=request.data,
             partial=True,
             context={'request': request}
@@ -157,28 +152,16 @@ class AdminChangePasswordView(APIView):
             return Response({"message": "Password changed successfully."}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-# --- ADD THESE TWO NEW CLASSES AT THE END OF THE FILE ---
-
 class PrivacyPolicyAPIView(APIView):
-    """
-    A dedicated, public endpoint to retrieve the Privacy Policy.
-    """
-    permission_classes = [AllowAny] # Anyone can view this
-
+    permission_classes = [AllowAny]
     def get(self, request, *args, **kwargs):
-        # We find the content with the specific slug 'privacy-policy'
         content = get_object_or_404(SiteContent, slug='privacy-policy')
         serializer = SiteContentSerializer(content)
         return Response(serializer.data)
 
 class TermsAndConditionsAPIView(APIView):
-    """
-    A dedicated, public endpoint to retrieve the Terms & Conditions.
-    """
-    permission_classes = [AllowAny] # Anyone can view this
-
+    permission_classes = [AllowAny]
     def get(self, request, *args, **kwargs):
-        # We find the content with the specific slug 'terms-and-conditions'
         content = get_object_or_404(SiteContent, slug='terms-and-conditions')
         serializer = SiteContentSerializer(content)
         return Response(serializer.data)

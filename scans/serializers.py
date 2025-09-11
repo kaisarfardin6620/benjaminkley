@@ -1,22 +1,13 @@
-# scans/serializers.py
-
 from rest_framework import serializers
 from .models import Scan
 
 class ScanCreateSerializer(serializers.ModelSerializer):
-    """
-    Serializer for the initial upload of a new scan.
-    """
     class Meta:
         model = Scan
         fields = ('name', 'notes', 'custom_field', 'image_front', 'image_back', 'image_left', 'image_right')
 
 
 class ScanDetailSerializer(serializers.ModelSerializer):
-    """
-    Serializer for displaying the final details of a scan TO THE MOBILE APP.
-    This version produces the exact fields required by the UI screenshot, plus the status.
-    """
     Name = serializers.SerializerMethodField()
     Date_of_Scan = serializers.DateTimeField(source='created_at', format="%B %d, %Y", read_only=True)
 
@@ -26,18 +17,18 @@ class ScanDetailSerializer(serializers.ModelSerializer):
     Eye_to_Eye = serializers.CharField(source='eye_to_eye')
     Notes = serializers.CharField(source='notes')
     Custom_Fit = serializers.CharField(source='custom_field')
-    
-    # --- THIS IS THE FIX ---
-    # The 'status' field has now been added.
     status = serializers.CharField()
+    thumbnail_image = serializers.ImageField(source='image_front', use_url=True, read_only=True)
+    scan_id = serializers.UUIDField(source='id', read_only=True)
 
     class Meta:
         model = Scan
-        # The fields list now contains the status field.
         fields = (
+            'scan_id',
             'Name',
             'Date_of_Scan',
-            'status', # The mobile app needs this field
+            'status',
+            'thumbnail_image',
             'Head_Width',
             'Head_Length',
             'Ear_to_Ear',

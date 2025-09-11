@@ -1,7 +1,7 @@
 import cv2
 import mediapipe as mp
 import numpy as np
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 
 ASSUMED_IPD_MM = 64.0
 LEFT_PUPIL_INDEX = 473
@@ -25,16 +25,35 @@ def get_dynamic_2d_measurements(image_path: str) -> Optional[Dict[str, float]]:
             min_detection_confidence=0.5) as face_mesh:
 
         image = cv2.imread(image_path)
-        if image is None: return None
+        if image is None:
+            print(f"Warning: Could not read image at path: {image_path}")
+            return None
+            
+        # --- THIS IS THE FIX ---
+        # We resize the image to a maximum height of 1080 pixels before processing.
+        # This drastically reduces memory usage and prevents the worker from crashing,
+        # without losing significant accuracy for this task.
+        h, w, _ = image.shape
+        if h > 1080:
+            scale = 1080 / h
+            new_w, new_h = int(w * scale), int(h * scale)
+            print(f"INFO: Resizing image from {w}x{h} to {new_w}x{new_h} to conserve memory.")
+            image = cv2.resize(image, (new_w, new_h))
+        # --- END OF THE FIX ---
             
         image_height_px, image_width_px, _ = image.shape
         results = face_mesh.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
-        if not results.multi_face_landmarks: return None
+        if not results.multi_face_landmarks:
+            print("Warning: MediaPipe failed to detect face landmarks in the provided image.")
+            return None
+            
         landmarks = results.multi_face_landmarks[0].landmark
 
         ipd_pixels = calculate_pixel_distance(landmarks[LEFT_PUPIL_INDEX], landmarks[RIGHT_PUPIL_INDEX], image_width_px, image_height_px)
-        if ipd_pixels < 1: return None
+        if ipd_pixels < 1:
+            print("Warning: Calculated interpupillary distance in pixels is too small to be reliable.")
+            return None
         
         pixels_per_mm = ipd_pixels / ASSUMED_IPD_MM
 

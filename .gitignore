@@ -9,3 +9,5 @@ settings.json
 postman2.json
 celerybeat-schedule
 profile_pics
+scans/inputs
+scans/outputs

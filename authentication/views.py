@@ -76,14 +76,14 @@ class ResendSignupOTPView(APIView):
             try:
                 user = User.objects.get(username=username)
                 if user.is_active:
-                    return Response({'error': 'Account is already active.'}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({'error': 'This account is already active. Please log in.'}, status=status.HTTP_400_BAD_REQUEST)
                 AuthToken.objects.filter(user=user, token_type='signup', is_used=False).update(is_used=True)
                 otp = generate_otp()
                 AuthToken.objects.create(user=user, otp_code=otp, token_type='signup')
                 send_otp_email(user, otp, purpose="account verification")
-                return Response({'message': 'New OTP sent to your email.'}, status=status.HTTP_200_OK)
+                return Response({'message': 'A new OTP has been sent to your email.'}, status=status.HTTP_200_OK)
             except User.DoesNotExist:
-                return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+                return Response({'error': 'No pending account found with this email address.'}, status=status.HTTP_404_NOT_FOUND)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 class MyTokenObtainPairView(TokenObtainPairView):
@@ -190,9 +190,10 @@ class PasswordResetRequestOTPView(APIView):
                 otp = generate_otp()
                 AuthToken.objects.create(user=user, otp_code=otp, token_type='password_reset_otp')
                 send_otp_email(user, otp, purpose="password reset")
+                return Response({'message': 'An OTP has been sent to your email.'}, status=status.HTTP_200_OK)
+
             except User.DoesNotExist:
-                pass
-            return Response({'message': 'If an account with this email exists, an OTP has been sent.'}, status=status.HTTP_200_OK)
+                return Response({'error': 'No active account found with this email address.'}, status=status.HTTP_404_NOT_FOUND)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class VerifyPasswordResetOTPView(APIView):

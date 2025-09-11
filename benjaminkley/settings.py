@@ -37,7 +37,7 @@ INSTALLED_APPS = [
     'dashboard',
     'django_celery_beat',
     'core',
-    'storages',  # <-- THIS IS THE CRUCIAL FIX. IT WAS MISSING.
+    'storages',
 ]
 
 MIDDLEWARE = [
@@ -99,7 +99,7 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-REST_FRAMEWORK = {'DEFAULT_AUTHENTICATION_CLASSES': ('rest_framework_simplejwt.authentication.JWTAuthentication',),'DEFAULT_THROTTLE_CLASSES': ['rest_framework.throttling.AnonRateThrottle','rest_framework.throttling.UserRateThrottle'],'DEFAULT_THROTTLE_RATES': {'anon': '100/day','user': '1000/day'},'DEFAULT_RENDERER_CLASSES': ['core.renderers.CustomJSONRenderer','rest_framework.renderers.BrowsableAPIRenderer',]}
+REST_FRAMEWORK = {'DEFAULT_AUTHENTICATION_CLASSES': ('rest_framework_simplejwt.authentication.JWTAuthentication',),'DEFAULT_THROTTLE_CLASSES': ['rest_framework.throttling.AnonRateThrottle','rest_framework.throttling.UserRateThrottle'],'DEFAULT_THROTTLE_RATES': {'anon': '100/day','user': '1000/day'},'DEFAULT_RENDERER_CLASSES': ['core.renderers.CustomJSONRenderer','rest_framework.renderers.BrowsableAPIRenderer',],'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination','PAGE_SIZE': 10,}
 SIMPLE_JWT = {'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),'REFRESH_TOKEN_LIFETIME': timedelta(days=1),'ROTATE_REFRESH_TOKINS': True,'BLACKLIST_AFTER_ROTATION': True,'UPDATE_LAST_LOGIN': False,'ALGORITHM': 'HS256','SIGNING_KEY': SECRET_KEY,'AUTH_HEADER_TYPES': ('Bearer',),'USER_ID_FIELD': 'id','USER_ID_CLAIM': 'user_id','TOKEN_OBTAIN_SERIALIZER': 'authentication.serializers.MyTokenObtainPairSerializer',}
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
@@ -110,3 +110,4 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.getenv('EMAIL_HOST_USER')
 CORS_ALLOWED_ORIGINS = CSRF_TRUSTED_ORIGINS
 CORS_ALLOW_CREDENTIALS = True
+
