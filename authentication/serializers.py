@@ -1,5 +1,3 @@
-# authentication/serializers.py
-
 import re
 import hashlib
 import requests
@@ -57,10 +55,8 @@ class SignupSerializer(serializers.Serializer):
     def validate(self, data):
         if data['password'] != data['confirm_password']:
             raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
-        if User.objects.filter(email=data['email']).exists():
+        if User.objects.filter(email__iexact=data['email']).exists():
             raise serializers.ValidationError({"email": "This email is already in use by another account."})
-        if PasswordValidator.validate_breached_password(data['password']):
-            raise serializers.ValidationError({"password": "This password has been found in a data breach. Please choose a different one."})
         data.pop('confirm_password', None)
         return data
 
@@ -71,16 +67,19 @@ class SignupSerializer(serializers.Serializer):
             password=validated_data['password'],
             first_name=validated_data.get('first_name'),
             last_name=validated_data.get('last_name'),
-            is_active=False
+            is_active=True
         )
 
         profile = user.profile
+        
         profile.role = validated_data.get('role', profile.role)
         profile.clinic_name = validated_data.get('clinic_name', profile.clinic_name)
         profile.date_of_birth = validated_data.get('date_of_birth', profile.date_of_birth)
         profile.contact_number = validated_data.get('contact_number', profile.contact_number)
         profile.address = validated_data.get('address', profile.address)
         profile.profile_picture = validated_data.get('profile_picture', profile.profile_picture)
+        
+        profile.status = 'Active'
         
         profile.save()
 
@@ -177,12 +176,12 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         password = attrs.get('password')
 
         try:
-            user = User.objects.get(username=username)
+            user = User.objects.get(username__iexact=username)
         except User.DoesNotExist:
-            raise serializers.ValidationError('You have entered a wrong username.')
+            raise serializers.ValidationError('No active account found with the given credentials.')
 
         if not user.check_password(password):
-            raise serializers.ValidationError('Incorrect password.')
+            raise serializers.ValidationError('No active account found with the given credentials.')
         
         if not user.is_active:
              raise serializers.ValidationError('This account is not active. Please verify your email first.')

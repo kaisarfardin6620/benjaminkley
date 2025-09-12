@@ -5,6 +5,7 @@ from .models import Scan
 from .serializers import ScanCreateSerializer, ScanDetailSerializer
 from .tasks import process_scan_and_save
 from .pagination import ScanListPagination
+
 class ScanViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     pagination_class = ScanListPagination
@@ -27,4 +28,5 @@ class ScanViewSet(viewsets.ModelViewSet):
         scan = serializer.instance
         process_scan_and_save.delay(str(scan.id))
         headers = self.get_success_headers(serializer.data)
+        
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)

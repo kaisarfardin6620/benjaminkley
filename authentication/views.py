@@ -18,6 +18,7 @@ from .serializers import (
     PasswordResetRequestSerializer, PasswordResetVerifyOTPSerializer, SetNewPasswordSerializer,DeleteAccountSerializer
 )
 import random
+from dashboard.models import AdminNotification
 
 def generate_otp():
     return str(random.randint(100000, 999999))
@@ -38,15 +39,17 @@ def send_otp_email(user, otp, purpose="account verification"):
 class UserSignupAPIView(APIView):
     permission_classes = [AllowAny]
     parser_classes = [MultiPartParser, FormParser]
-
     def post(self, request):
         serializer = SignupSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
             otp = generate_otp()
             AuthToken.objects.create(user=user, otp_code=otp, token_type='signup')
-            send_otp_email(user, otp, purpose="account verification")
-            return Response({"message": "User registered successfully. An OTP has been sent to your email."}, status=status.HTTP_201_CREATED)
+            send_otp_email(user, otp, purpose="email verification") 
+            AdminNotification.objects.create(
+                message=f"New user signed up and is now active: {user.get_full_name()} ({user.email})."
+            )
+            return Response({"message": "User registered successfully. An OTP has been sent to verify your email."}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class VerifySignupOTPView(APIView):
@@ -74,16 +77,16 @@ class ResendSignupOTPView(APIView):
         if serializer.is_valid():
             username = serializer.validated_data['username']
             try:
-                user = User.objects.get(username=username)
+                user = User.objects.get(username__iexact=username) # Case-insensitive check
                 if user.is_active:
-                    return Response({'error': 'This account is already active. Please log in.'}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({'error': 'Account is already active.'}, status=status.HTTP_400_BAD_REQUEST)
                 AuthToken.objects.filter(user=user, token_type='signup', is_used=False).update(is_used=True)
                 otp = generate_otp()
                 AuthToken.objects.create(user=user, otp_code=otp, token_type='signup')
                 send_otp_email(user, otp, purpose="account verification")
-                return Response({'message': 'A new OTP has been sent to your email.'}, status=status.HTTP_200_OK)
+                return Response({'message': 'New OTP sent to your email.'}, status=status.HTTP_200_OK)
             except User.DoesNotExist:
-                return Response({'error': 'No pending account found with this email address.'}, status=status.HTTP_404_NOT_FOUND)
+                return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 class MyTokenObtainPairView(TokenObtainPairView):
@@ -91,7 +94,7 @@ class MyTokenObtainPairView(TokenObtainPairView):
     def post(self, request, *args, **kwargs):
         username = request.data.get('username')
         try:
-            user = User.objects.get(username=username)
+            user = User.objects.get(username__iexact=username) # Case-insensitive check
             if not user.is_active:
                 return Response({'error': 'Account not active. Please verify your account first.'}, status=status.HTTP_403_FORBIDDEN)
         except User.DoesNotExist:
@@ -115,38 +118,24 @@ class UserProfileAPIView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):
         profile, _ = UserProfile.objects.get_or_create(user=request.user)
-        serializer = ProfileSerializer(profile)
+        serializer = ProfileSerializer(profile, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 class UpdateProfileAPIView(APIView):
     permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]  # For handling file uploads if needed
+    parser_classes = [MultiPartParser, FormParser]
 
     def put(self, request):
-        # Get or create the user profile
         profile, _ = UserProfile.objects.get_or_create(user=request.user)
-
-        # Use the serializer to update user details (name, role, clinic_name, dob, address)
         serializer = UpdateProfileSerializer(
-            instance=request.user,  # Pass user instance
+            instance=request.user,
             data=request.data,
-            partial=True,  # Allow partial updates (not all fields required)
+            partial=True,
             context={'request': request}
         )
-
         if serializer.is_valid():
-            # Save the user instance (the base user details like first_name, last_name, email)
-            instance = serializer.save()
-
-            # Now update the profile fields (role, clinic_name, dob, address)
-            profile.role = request.data.get('role', profile.role)
-            profile.clinic_name = request.data.get('clinic_name', profile.clinic_name)
-            profile.date_of_birth = request.data.get('date_of_birth', profile.date_of_birth)
-            profile.address = request.data.get('address', profile.address)
-            profile.save()  # Save the updated profile
-
-            return Response(ProfileSerializer(profile).data, status=status.HTTP_200_OK)
-
+            serializer.save()
+            return Response(ProfileSerializer(profile, context={'request': request}).data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class ProfilePictureUploadAPIView(APIView):
@@ -155,15 +144,11 @@ class ProfilePictureUploadAPIView(APIView):
 
     def post(self, request, *args, **kwargs):
         profile, _ = UserProfile.objects.get_or_create(user=request.user)
-
         serializer = ProfilePictureSerializer(instance=profile, data=request.data)
-
         if serializer.is_valid():
             serializer.save()
-            
             return Response({"message": "Profile picture uploaded successfully."}, status=status.HTTP_200_OK)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)     
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 class ChangePasswordAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -185,13 +170,12 @@ class PasswordResetRequestOTPView(APIView):
         if serializer.is_valid():
             email = serializer.validated_data['email']
             try:
-                user = User.objects.get(email=email)
+                user = User.objects.get(email__iexact=email) # Case-insensitive check
                 AuthToken.objects.filter(user=user, token_type='password_reset_otp').delete()
                 otp = generate_otp()
                 AuthToken.objects.create(user=user, otp_code=otp, token_type='password_reset_otp')
                 send_otp_email(user, otp, purpose="password reset")
                 return Response({'message': 'An OTP has been sent to your email.'}, status=status.HTTP_200_OK)
-
             except User.DoesNotExist:
                 return Response({'error': 'No active account found with this email address.'}, status=status.HTTP_404_NOT_FOUND)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

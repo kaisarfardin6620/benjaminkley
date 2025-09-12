@@ -12,6 +12,7 @@ urlpatterns = [
     path('api/dashboard/', include('dashboard.urls')),
     path('api/privacy-policy/', PrivacyPolicyAPIView.as_view(), name='privacy-policy'),
     path('api/terms-and-conditions/', TermsAndConditionsAPIView.as_view(), name='terms-and-conditions'),
+    path('api/notifications/', include('notifications.urls')),
 ]
 
 if settings.DEBUG:

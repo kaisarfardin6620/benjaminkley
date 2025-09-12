@@ -9,7 +9,8 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv('SECRET_KEY')
-DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
+DEBUG = True
+#DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 ROOT_URLCONF = 'benjaminkley.urls'
 
 # --- HOSTING & SECURITY ---
@@ -38,6 +39,8 @@ INSTALLED_APPS = [
     'django_celery_beat',
     'core',
     'storages',
+    'notifications',
+    'fcm_django',
 ]
 
 MIDDLEWARE = [
@@ -111,3 +114,10 @@ DEFAULT_FROM_EMAIL = os.getenv('EMAIL_HOST_USER')
 CORS_ALLOWED_ORIGINS = CSRF_TRUSTED_ORIGINS
 CORS_ALLOW_CREDENTIALS = True
 
+FCM_DJANGO_SETTINGS = {
+    "APP_VERBOSE_NAME": "Benjamin Kley App",
+    "FCM_SERVER_KEY": "[Legacy] Please use FCM_CREDENTIALS instead.",
+    "ONE_DEVICE_PER_USER": False,
+    "DELETE_INACTIVE_DEVICES": True,
+    "FCM_CREDENTIALS": str(BASE_DIR / 'serviceAccountKey.json'),
+}

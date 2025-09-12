@@ -16,7 +16,8 @@ from authentication.models import UserProfile, PasswordHistory
 from scans.models import Scan
 from contact_support.models import ContactMessage
 from .models import *
-
+from scans.tasks import process_scan_and_save
+from notifications.utils import create_and_send_notification
 
 class DashboardStatsAPIView(APIView):
     permission_classes = [IsAdminUser]
@@ -71,33 +72,75 @@ class UserManagementViewSet(viewsets.ModelViewSet):
     queryset = User.objects.select_related('profile').prefetch_related('scans').order_by('-date_joined')
     filter_backends = [filters.SearchFilter]
     search_fields = ['first_name', 'last_name', 'email']
+
     @action(detail=True, methods=['post'], url_path='block')
     def block_user(self, request, pk=None):
-        profile = UserProfile.objects.get(user_id=pk)
+        profile = get_object_or_404(UserProfile, user_id=pk)
         profile.status = 'Suspended'
         profile.save()
-        return Response({'status': 'User blocked'})
+
+        create_and_send_notification(
+            user=profile.user,
+            title="Account Suspended",
+            message="Your account has been suspended. Please contact support for more information."
+        )
+
+        return Response({'status': 'User blocked successfully.'})
+
     @action(detail=True, methods=['post'], url_path='approve')
     def approve_user(self, request, pk=None):
-        profile = UserProfile.objects.get(user_id=pk)
+        profile = get_object_or_404(UserProfile, user_id=pk)
         profile.status = 'Active'
         profile.save()
-        return Response({'status': 'User approved'})
+
+        create_and_send_notification(
+            user=profile.user,
+            title="Account Approved",
+            message="Your account has been approved. You can now start using the app."
+        )
+
+        return Response({'status': 'User approved successfully.'})
 
 class ScanManagementViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     serializer_class = DashboardScanSerializer
     queryset = Scan.objects.select_related('user').order_by('-created_at')
+    
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'user__email', 'user__first_name', 'user__last_name']
+    ordering_fields = ['created_at', 'status']
+
+    @action(detail=True, methods=['post'], url_path='rescan')
+    def request_rescan(self, request, pk=None):
+        scan = self.get_object()
+        scan.status = Scan.Status.PROCESSING
+        scan.save()
+        process_scan_and_save.delay(str(scan.id))
+
+        create_and_send_notification(
+            user=scan.user,
+            title="Re-Scan Requested",
+            message=f"An admin has requested a re-scan of your scan named '{scan.name}'."
+        )
+        return Response({'status': f'Re-scan for scan ID {scan.id} has been queued.'})
 
 class ContactMessageViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     serializer_class = DashboardContactMessageSerializer
     queryset = ContactMessage.objects.all().order_by('-created_at')
+    
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'email', 'message']
+    ordering_fields = ['created_at', 'is_replied']
 
 class PushNotificationViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     serializer_class = PushNotificationSerializer
     queryset = PushNotification.objects.all().order_by('-sent_at')
+    
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['title', 'message']
+
     def perform_create(self, serializer):
         print(f"--- SIMULATING PUSH NOTIFICATION ---")
         print(f"Title: {serializer.validated_data['title']}")
@@ -122,22 +165,40 @@ class SiteContentViewSet(viewsets.ModelViewSet):
 class AdminProfileView(APIView):
     permission_classes = [IsAdminUser]
     parser_classes = [MultiPartParser, FormParser]
+
     def get(self, request):
         UserProfile.objects.get_or_create(user=request.user)
-        serializer = AdminProfileSerializer(request.user)
+        serializer = AdminProfileSerializer(request.user, context={'request': request})
         return Response(serializer.data)
+
     def put(self, request):
-        profile = request.user.profile
-        serializer = AdminUpdateProfileSerializer(
+        user = request.user
+        profile = user.profile
+        
+        full_name = request.data.get('full_name')
+        if full_name:
+            parts = full_name.strip().split(' ', 1)
+            user.first_name = parts[0]
+            user.last_name = parts[1] if len(parts) > 1 else ''
+        
+        email = request.data.get('email')
+        if email:
+            user.email = email
+            user.username = email
+        
+        user.save()
+
+        profile_serializer = AdminUpdateProfileSerializer(
             instance=profile,
             data=request.data,
-            partial=True,
-            context={'request': request}
+            partial=True
         )
-        if serializer.is_valid():
-            serializer.save()
-            return Response(AdminProfileSerializer(request.user).data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if profile_serializer.is_valid():
+            profile_serializer.save()
+            final_serializer = AdminProfileSerializer(user, context={'request': request})
+            return Response(final_serializer.data)
+        
+        return Response(profile_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class AdminChangePasswordView(APIView):
     permission_classes = [IsAdminUser]

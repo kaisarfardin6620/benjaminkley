@@ -4,22 +4,31 @@ from .models import Scan
 class ScanCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Scan
-        fields = ('name', 'notes', 'custom_field', 'image_front', 'image_back', 'image_left', 'image_right')
+        fields = (
+            'name', 
+            'notes', 
+            'custom_field', 
+            'image_front', 
+            'image_back', 
+            'image_left', 
+            'image_right'
+        )
 
 
 class ScanDetailSerializer(serializers.ModelSerializer):
+    scan_id = serializers.UUIDField(source='id', read_only=True)
     Name = serializers.SerializerMethodField()
     Date_of_Scan = serializers.DateTimeField(source='created_at', format="%B %d, %Y", read_only=True)
+    thumbnail_image = serializers.ImageField(source='image_front', use_url=True, read_only=True)
 
     Head_Width = serializers.CharField(source='head_width')
     Head_Length = serializers.CharField(source='head_length')
     Ear_to_Ear = serializers.CharField(source='ear_to_ear')
     Eye_to_Eye = serializers.CharField(source='eye_to_eye')
+    
     Notes = serializers.CharField(source='notes')
     Custom_Fit = serializers.CharField(source='custom_field')
-    status = serializers.CharField()
-    thumbnail_image = serializers.ImageField(source='image_front', use_url=True, read_only=True)
-    scan_id = serializers.UUIDField(source='id', read_only=True)
+    status = serializers.CharField() 
 
     class Meta:
         model = Scan
@@ -38,6 +47,7 @@ class ScanDetailSerializer(serializers.ModelSerializer):
         )
         
     def get_Name(self, obj):
-        if obj.user:
+        """Returns the user's full name, or 'N/A' if not available."""
+        if obj.user and obj.user.get_full_name():
             return obj.user.get_full_name()
         return "N/A"

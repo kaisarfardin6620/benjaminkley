@@ -13,31 +13,25 @@ class DashboardUserSerializer(serializers.ModelSerializer):
     date_of_birth = serializers.DateField(source='profile.date_of_birth', read_only=True)
     number_of_scan = serializers.SerializerMethodField()
     
+    profile_picture = serializers.ImageField(source='profile.profile_picture', read_only=True, use_url=True)
+    
     class Meta:
         model = User
-        fields = ('id', 'first_name', 'last_name', 'email', 'role', 'date_of_birth', 'number_of_scan', 'status', 'date_joined')
+        fields = (
+            'id', 'first_name', 'last_name', 'email', 'profile_picture', # <-- Field added here
+            'role', 'date_of_birth', 'number_of_scan', 'status', 'date_joined'
+        )
     
     def get_number_of_scan(self, obj):
         return obj.scans.count()
 
-    # --- THIS IS THE FIX ---
-    # This custom update method tells the serializer how to correctly save the 'status'
-    # field to the related UserProfile model, fixing the 500 error.
     def update(self, instance, validated_data):
-        # When using `source=`, DRF nests the data. We pop the 'profile' data dictionary.
         profile_data = validated_data.pop('profile', {})
         status = profile_data.get('status')
-
-        # Get the related UserProfile instance
         profile = instance.profile
-
-        # Update the UserProfile status if it was provided in the request
         if status is not None:
             profile.status = status
             profile.save()
-
-        # Let the parent ModelSerializer's update method handle the standard User fields
-        # (like first_name, last_name, email).
         return super().update(instance, validated_data)
 
 
@@ -76,7 +70,8 @@ class AdminProfileSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source='get_full_name')
     email = serializers.EmailField()
     contact_number = serializers.CharField(source='profile.contact_number')
-    profile_picture = serializers.ImageField(source='profile.profile_picture', use_url=True)
+    
+    profile_picture = serializers.ImageField(source='profile.profile_picture', use_url=True, read_only=True)
 
     class Meta:
         model = User
@@ -84,30 +79,12 @@ class AdminProfileSerializer(serializers.ModelSerializer):
 
 
 class AdminUpdateProfileSerializer(serializers.ModelSerializer):
-    full_name = serializers.CharField(source='user.get_full_name', required=False)
-    email = serializers.EmailField(source='user.email', required=False)
+    
+    profile_picture = serializers.ImageField(required=False, write_only=True)
     
     class Meta:
         model = UserProfile
-        fields = ('full_name', 'email', 'contact_number', 'profile_picture')
-
-    def update(self, instance, validated_data):
-        user = instance.user
-
-        user_data = validated_data.pop('user', {})
-        if 'get_full_name' in user_data:
-            full_name = user_data['get_full_name'].strip()
-            parts = full_name.split(' ', 1)
-            user.first_name = parts[0]
-            user.last_name = parts[1] if len(parts) > 1 else ''
-        
-        if 'email' in user_data:
-            user.email = user_data['email']
-            user.username = user_data['email'] 
-        
-        user.save()
-
-        return super().update(instance, validated_data)
+        fields = ('contact_number', 'profile_picture')
     
 class AdminChangePasswordSerializer(serializers.Serializer):
     current_password = serializers.CharField(write_only=True, required=True)
