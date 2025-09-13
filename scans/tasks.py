@@ -19,6 +19,18 @@ def process_scan_and_save(scan_id: str):
         scan.head_length = Decimal(measurements.get('head_length', 0))
         scan.ear_to_ear = Decimal(measurements.get('ear_to_ear', 0))
         scan.eye_to_eye = Decimal(measurements.get('eye_to_eye', 0))
+        scan.head_height = Decimal(measurements.get('head_height', 0))
+        scan.head_circumference_A = Decimal(measurements.get('head_circumference_A', 0))
+        scan.forehead_to_back_B = Decimal(measurements.get('forehead_to_back_B', 0))
+        scan.cross_measurement_C = Decimal(measurements.get('cross_measurement_C', 0))
+        scan.under_chin_D = Decimal(measurements.get('under_chin_D', 0))
+        scan.eyebrow_to_earlobe_E = Decimal(measurements.get('eyebrow_to_earlobe_E', 0))
+        scan.eye_corner_to_ear_F = Decimal(measurements.get('eye_corner_to_ear_F', 0))
+        scan.ear_height_G = Decimal(measurements.get('ear_height_G', 0))
+        scan.ear_width_H = Decimal(measurements.get('ear_width_H', 0))
+        scan.cheek_guard_clearance_L = Decimal(measurements.get('cheek_guard_clearance_L', 0))
+        scan.cheek_guard_height_M = Decimal(measurements.get('cheek_guard_height_M', 0))
+        scan.cheek_guard_width_N = Decimal(measurements.get('cheek_guard_width_N', 0))
         
         scan.status = Scan.Status.COMPLETED
         logger.info(f"Completed processing for scan {scan_id}")
