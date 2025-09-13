@@ -160,6 +160,10 @@ class ProfilePictureSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProfile
         fields = ['profile_picture']
+    def update(self, instance, validated_data):
+        instance.profile_picture = validated_data.get('profile_picture', instance.profile_picture)
+        instance.save()
+        return instance
 
 class ResendVerificationSerializer(serializers.Serializer):
     username = serializers.CharField()

@@ -26,7 +26,16 @@ class ScanViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         scan = serializer.instance
-        process_scan_and_save.delay(str(scan.id))
-        headers = self.get_success_headers(serializer.data)
         
+        # Synchronous processing for debugging (remove for production)
+        try:
+            process_scan_and_save(str(scan.id))  # No .delay() for sync execution
+        except Exception as e:
+            # Log error but let task handle status updates
+            print(f"Error processing scan {scan.id}: {e}")
+        
+        # For production, use async:
+        # process_scan_and_save.delay(str(scan.id))
+        
+        headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)

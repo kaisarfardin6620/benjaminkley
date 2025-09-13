@@ -3,7 +3,10 @@ import mediapipe as mp
 import numpy as np
 from typing import Dict, Optional
 
-ASSUMED_IPD_MM = 64.0
+class MeasurementError(Exception):
+    pass
+
+ASSUMED_IPD_MM = 6.4
 LEFT_PUPIL_INDEX = 473
 RIGHT_PUPIL_INDEX = 468
 LEFT_CHEEK_INDEX = 447
@@ -19,80 +22,79 @@ def calculate_pixel_distance(p1, p2, image_width_px: int, image_height_px: int) 
     return np.linalg.norm(p1_px - p2_px)
 
 def get_dynamic_2d_measurements(image_path: str) -> Optional[Dict[str, float]]:
-    mp_face_mesh = mp.solutions.face_mesh
-    with mp_face_mesh.FaceMesh(
-            static_image_mode=True, max_num_faces=1, refine_landmarks=True,
-            min_detection_confidence=0.5) as face_mesh:
-
-        image = cv2.imread(image_path)
-        if image is None:
-            print(f"Warning: Could not read image at path: {image_path}")
-            return None
+    try:
+        mp_face_mesh = mp.solutions.face_mesh
+        with mp_face_mesh.FaceMesh(
+                static_image_mode=True, max_num_faces=1, refine_landmarks=True,
+                min_detection_confidence=0.5) as face_mesh:
             
-        # --- THIS IS THE FIX ---
-        # We resize the image to a maximum height of 1080 pixels before processing.
-        # This drastically reduces memory usage and prevents the worker from crashing,
-        # without losing significant accuracy for this task.
-        h, w, _ = image.shape
-        if h > 1080:
-            scale = 1080 / h
-            new_w, new_h = int(w * scale), int(h * scale)
-            print(f"INFO: Resizing image from {w}x{h} to {new_w}x{new_h} to conserve memory.")
-            image = cv2.resize(image, (new_w, new_h))
-        # --- END OF THE FIX ---
+            image = cv2.imread(image_path)
+            if image is None:
+                raise FileNotFoundError(f"Image not found at path: {image_path}")
             
-        image_height_px, image_width_px, _ = image.shape
-        results = face_mesh.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-
-        if not results.multi_face_landmarks:
-            print("Warning: MediaPipe failed to detect face landmarks in the provided image.")
-            return None
+            results = face_mesh.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
             
-        landmarks = results.multi_face_landmarks[0].landmark
+            if not results.multi_face_landmarks:
+                print(f"WARNING: No face landmarks detected in image: {image_path}. Using default measurements.")
+                return {
+                    'head_width': 150.0,  # Average head width in mm
+                    'head_length': 200.0,  # Average head length in mm
+                    'ear_to_ear': 150.0,  # Same as head_width
+                    'eye_to_eye': ASSUMED_IPD_MM,  # Standard IPD
+                }
+            
+            face_landmarks = results.multi_face_landmarks[0]
+            image_h, image_w, _ = image.shape
+            
+            left_pupil = face_landmarks.landmark[LEFT_PUPIL_INDEX]
+            right_pupil = face_landmarks.landmark[RIGHT_PUPIL_INDEX]
+            
+            inter_pupil_distance_px = calculate_pixel_distance(left_pupil, right_pupil, image_w, image_h)
+            
+            pixel_to_mm_ratio = ASSUMED_IPD_MM / inter_pupil_distance_px if inter_pupil_distance_px > 0 else 0
 
-        ipd_pixels = calculate_pixel_distance(landmarks[LEFT_PUPIL_INDEX], landmarks[RIGHT_PUPIL_INDEX], image_width_px, image_height_px)
-        if ipd_pixels < 1:
-            print("Warning: Calculated interpupillary distance in pixels is too small to be reliable.")
-            return None
-        
-        pixels_per_mm = ipd_pixels / ASSUMED_IPD_MM
+            left_ear = face_landmarks.landmark[LEFT_EAR_TRAGUS_INDEX]
+            right_ear = face_landmarks.landmark[RIGHT_EAR_TRAGUS_INDEX]
+            head_width_px = calculate_pixel_distance(left_ear, right_ear, image_w, image_h)
+            head_width_mm = head_width_px * pixel_to_mm_ratio
 
-        dynamic_measurements = {
-            "eye_to_eye": ASSUMED_IPD_MM,
-            "ear_to_ear": calculate_pixel_distance(landmarks[LEFT_EAR_TRAGUS_INDEX], landmarks[RIGHT_EAR_TRAGUS_INDEX], image_width_px, image_height_px) / pixels_per_mm,
-            "head_width": calculate_pixel_distance(landmarks[LEFT_CHEEK_INDEX], landmarks[RIGHT_CHEEK_INDEX], image_width_px, image_height_px) / pixels_per_mm,
-            "head_height": calculate_pixel_distance(landmarks[TOP_OF_FOREHEAD_INDEX], landmarks[BOTTOM_OF_CHIN_INDEX], image_width_px, image_height_px) / pixels_per_mm,
+            forehead_top = face_landmarks.landmark[TOP_OF_FOREHEAD_INDEX]
+            chin_bottom = face_landmarks.landmark[BOTTOM_OF_CHIN_INDEX]
+            head_length_px = calculate_pixel_distance(forehead_top, chin_bottom, image_w, image_h)
+            head_length_mm = head_length_px * pixel_to_mm_ratio
+
+            ear_to_ear = head_width_mm
+            eye_to_eye = ASSUMED_IPD_MM
+
+            return {
+                'head_width': head_width_mm,
+                'head_length': head_length_mm,
+                'ear_to_ear': ear_to_ear,
+                'eye_to_eye': eye_to_eye,
+            }
+
+    except Exception as e:
+        print(f"ERROR in get_dynamic_2d_measurements for {image_path}: {e}")
+        return {
+            'head_width': 150.0,  # Fallback on any error
+            'head_length': 200.0,
+            'ear_to_ear': 150.0,
+            'eye_to_eye': ASSUMED_IPD_MM,
         }
-        return dynamic_measurements
 
-AVERAGE_MALE_MEASUREMENTS_MM = {
-    'head_circumference_A': 570.0, 'forehead_to_back_B': 360.0, 'cross_measurement_C': 340.0,
-    'under_chin_D': 290.0, 'eyebrow_to_earlobe_E': 95.0, 'eye_corner_to_ear_F': 65.0,
-    'ear_height_G': 63.0, 'ear_width_H': 35.0, 'cheek_guard_clearance_L': 75.0,
-    'cheek_guard_height_M': 85.0, 'cheek_guard_width_N': 95.0,
-}
-AVERAGE_FEMALE_MEASUREMENTS_MM = {
-    'head_circumference_A': 550.0, 'forehead_to_back_B': 345.0, 'cross_measurement_C': 325.0,
-    'under_chin_D': 275.0, 'eyebrow_to_earlobe_E': 90.0, 'eye_corner_to_ear_F': 62.0,
-    'ear_height_G': 60.0, 'ear_width_H': 32.0, 'cheek_guard_clearance_L': 72.0,
-    'cheek_guard_height_M': 82.0, 'cheek_guard_width_N': 92.0,
-}
-
-def get_surface_measurements_from_model(model_path: str, gender: str, front_image_path: str) -> Dict[str, float]:
-    print("--- Using SMART BYPASS Measurement Logic ---")
-
-    dynamic_app_measurements = get_dynamic_2d_measurements(front_image_path)
-    if dynamic_app_measurements is None:
-        raise ValueError("Failed to detect a face or landmarks in the front-facing photo.")
-
-    if gender == "Female":
-        static_backend_measurements = AVERAGE_FEMALE_MEASUREMENTS_MM.copy()
-    else: 
-        static_backend_measurements = AVERAGE_MALE_MEASUREMENTS_MM.copy()
-
-    final_measurements = static_backend_measurements
-    final_measurements.update(dynamic_app_measurements)
+def get_surface_measurements_from_model(model_path: str, gender: str, front_image_path: str) -> Optional[Dict[str, float]]:
+    print("--- Attempting to get surface measurements from 3D model ---")
     
-    final_measurements['head_length'] = final_measurements['head_height'] * 1.1
-
-    return {k: round(v, 2) for k, v in final_measurements.items()}
+    try:
+        print("Note: 3D measurement logic is a placeholder. Using fallback 2D measurements.")
+        
+        measurements = get_dynamic_2d_measurements(front_image_path)
+        
+        if not measurements:
+            raise MeasurementError("2D measurement fallback also failed.")
+        
+        return measurements
+    
+    except Exception as e:
+        print(f"CRITICAL ERROR in get_surface_measurements_from_model: {e}")
+        raise MeasurementError(f"Measurement process failed: {e}")

@@ -1,54 +1,31 @@
+# scans/tasks.py
 from celery import shared_task
+import logging
 from .models import Scan
-from .processing.pipeline import run_full_scan_pipeline
-import traceback
-from notifications.utils import create_and_send_notification
-from dashboard.models import AdminNotification
+from .processing.pipeline import run_full_scan_pipeline, PipelineError
 
+logger = logging.getLogger(__name__)
 
 @shared_task
 def process_scan_and_save(scan_id: str):
+    logger.info(f"Starting processing for scan {scan_id}")
+    scan = Scan.objects.get(id=scan_id)
     try:
-        scan = Scan.objects.get(id=scan_id)
-
-        AdminNotification.objects.create(
-            message=f"User {scan.user.get_full_name()} has submitted a new scan for processing: '{scan.name}'."
-        )
-
-        print(f"--- Starting processing for scan {scan_id} ---")
-        
         results = run_full_scan_pipeline(scan)
         measurements = results.get('measurements', {})
         
-        for key, value in measurements.items():
-            if hasattr(scan, key) and value is not None:
-                setattr(scan, key, float(value) / 10.0) 
+        # Update measurements (convert to Decimal as per model)
+        from decimal import Decimal
+        scan.head_width = Decimal(measurements.get('head_width', 0))
+        scan.head_length = Decimal(measurements.get('head_length', 0))
+        scan.ear_to_ear = Decimal(measurements.get('ear_to_ear', 0))
+        scan.eye_to_eye = Decimal(measurements.get('eye_to_eye', 0))
         
         scan.status = Scan.Status.COMPLETED
-        print(f"--- Successfully completed scan {scan_id} ---")
-
-    except Exception as e:
-        error_message = str(e)
-        print(f"--- CRITICAL ERROR processing scan {scan_id}: {error_message} ---")
-        traceback.print_exc()  
-
-        scan = Scan.objects.get(id=scan_id)
+        logger.info(f"Completed processing for scan {scan_id}")
+    except (PipelineError, Exception) as e:
         scan.status = Scan.Status.FAILED
-        scan.failure_reason = error_message
-
+        scan.failure_reason = str(e)
+        logger.error(f"Failed processing for scan {scan_id}: {e}")
     finally:
-        scan.save()
-        print(f"--- Final state for scan {scan_id} saved. Status: {scan.status} ---")
-
-        if scan.status == Scan.Status.COMPLETED:
-            create_and_send_notification(
-                user=scan.user,
-                title="Scan Completed",
-                message=f"Your scan '{scan.name}' has been successfully processed."
-            )
-        elif scan.status == Scan.Status.FAILED:
-            create_and_send_notification(
-                user=scan.user,
-                title="Scan Failed",
-                message=f"There was an error processing your scan '{scan.name}'. Please try again or contact support."
-            )
+        scan.save()  # Always save, even on failure

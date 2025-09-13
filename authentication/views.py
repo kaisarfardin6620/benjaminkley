@@ -144,11 +144,19 @@ class ProfilePictureUploadAPIView(APIView):
 
     def post(self, request, *args, **kwargs):
         profile, _ = UserProfile.objects.get_or_create(user=request.user)
-        serializer = ProfilePictureSerializer(instance=profile, data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response({"message": "Profile picture uploaded successfully."}, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        if 'profile_picture' not in request.FILES:
+            return Response(
+                {"error": "No 'profile_picture' file was provided in the form-data."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        uploaded_file = request.FILES['profile_picture']
+        profile.profile_picture = uploaded_file
+        profile.save()
+        return Response({"message": "Profile picture uploaded successfully."}, status=status.HTTP_200_OK)
+        
+        return Response(serializer.data, status=status.HTTP_200_OK)
     
 class ChangePasswordAPIView(APIView):
     permission_classes = [IsAuthenticated]
