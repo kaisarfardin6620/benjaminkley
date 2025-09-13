@@ -19,6 +19,7 @@ from .serializers import (
 )
 import random
 from dashboard.models import AdminNotification
+from notifications.utils import create_and_send_notification
 
 def generate_otp():
     return str(random.randint(100000, 999999))
@@ -46,9 +47,17 @@ class UserSignupAPIView(APIView):
             otp = generate_otp()
             AuthToken.objects.create(user=user, otp_code=otp, token_type='signup')
             send_otp_email(user, otp, purpose="email verification") 
+            
             AdminNotification.objects.create(
                 message=f"New user signed up and is now active: {user.get_full_name()} ({user.email})."
             )
+
+            create_and_send_notification(
+                user=user,
+                title="Welcome to Our App!",
+                message=f"Hi {user.first_name}, thank you for joining. Your account is now active."
+            )
+
             return Response({"message": "User registered successfully. An OTP has been sent to verify your email."}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -126,15 +135,23 @@ class UpdateProfileAPIView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def put(self, request):
-        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        user = request.user
+        profile, _ = UserProfile.objects.get_or_create(user=user)
         serializer = UpdateProfileSerializer(
-            instance=request.user,
+            instance=user,
             data=request.data,
             partial=True,
             context={'request': request}
         )
         if serializer.is_valid():
             serializer.save()
+
+            create_and_send_notification(
+                user=user,
+                title="Profile Updated",
+                message="Your profile details have been successfully updated."
+            )
+
             return Response(ProfileSerializer(profile, context={'request': request}).data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -168,6 +185,13 @@ class ChangePasswordAPIView(APIView):
             user.set_password(new_password)
             user.save()
             PasswordHistory.objects.create(user=user, hashed_password=user.password)
+
+            create_and_send_notification(
+                user=user,
+                title="Security Alert: Password Changed",
+                message="Your account password was successfully changed. If you did not make this change, please contact support immediately."
+            )
+
             return Response({'message': 'Password changed successfully.'}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
