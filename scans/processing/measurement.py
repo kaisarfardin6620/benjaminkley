@@ -4,10 +4,8 @@ import numpy as np
 from typing import Dict, Optional
 import trimesh
 
-# --- Constants ---
-ASSUMED_IPD_CM = 6.4  # Assumed Inter-Pupillary Distance in cm, used for scaling
+ASSUMED_IPD_CM = 6.4  
 
-# --- MediaPipe Landmark Indices ---
 LEFT_PUPIL_INDEX = 473
 RIGHT_PUPIL_INDEX = 468
 LEFT_EAR_TRAGUS_INDEX = 234
@@ -15,33 +13,17 @@ RIGHT_EAR_TRAGUS_INDEX = 454
 TOP_OF_FOREHEAD_INDEX = 10
 BOTTOM_OF_CHIN_INDEX = 152
 NOSE_TIP_INDEX = 1
-SIDE_PROFILE_EAR_TRAGUS_INDEX = 234 # Using left ear tragus for side profile
+SIDE_PROFILE_EAR_TRAGUS_INDEX = 234 
 
 class MeasurementError(Exception):
-    """Custom exception for measurement process failures."""
     pass
 
 def calculate_pixel_distance(p1, p2, image_width_px: int, image_height_px: int) -> float:
-    """Calculates pixel distance between two normalized MediaPipe landmarks."""
     p1_px = np.array([p1.x * image_width_px, p1.y * image_height_px])
     p2_px = np.array([p2.x * image_width_px, p2.y * image_height_px])
     return np.linalg.norm(p1_px - p2_px)
 
 def get_measurements_from_images(image_paths: Dict[str, str]) -> Dict[str, float]:
-    """
-    Performs 2D analysis on user images to get key head measurements.
-    
-    It relies on:
-    1. A detectable face in the front image (raises error if not found).
-    2. A fixed inter-pupil distance (IPD) to establish scale.
-    3. The side-profile image to calculate a more accurate head depth.
-    
-    Args:
-        image_paths: Dict with paths to 'front' and 'left' images.
-
-    Returns:
-        A dictionary of calculated head measurements in cm.
-    """
     mp_face_mesh = mp.solutions.face_mesh
     
     front_image_path = image_paths.get('front')
@@ -58,7 +40,6 @@ def get_measurements_from_images(image_paths: Dict[str, str]) -> Dict[str, float
             static_image_mode=True, max_num_faces=1, refine_landmarks=True,
             min_detection_confidence=0.5) as face_mesh:
         
-        # --- 1. Process Front Image & Fail on No Face ---
         results_front = face_mesh.process(cv2.cvtColor(image_front, cv2.COLOR_BGR2RGB))
         
         if not results_front.multi_face_landmarks:
@@ -67,7 +48,6 @@ def get_measurements_from_images(image_paths: Dict[str, str]) -> Dict[str, float
         landmarks_front = results_front.multi_face_landmarks[0]
         h_front, w_front, _ = image_front.shape
 
-        # --- 2. Determine Scale using IPD ---
         left_pupil = landmarks_front.landmark[LEFT_PUPIL_INDEX]
         right_pupil = landmarks_front.landmark[RIGHT_PUPIL_INDEX]
         ipd_px = calculate_pixel_distance(left_pupil, right_pupil, w_front, h_front)
@@ -76,7 +56,6 @@ def get_measurements_from_images(image_paths: Dict[str, str]) -> Dict[str, float
              raise MeasurementError("Could not calculate inter-pupil distance for scaling.")
         pixel_to_cm_ratio = ipd_px / ASSUMED_IPD_CM
 
-        # --- 3. Calculate Measurements from Front Image ---
         left_ear = landmarks_front.landmark[LEFT_EAR_TRAGUS_INDEX]
         right_ear = landmarks_front.landmark[RIGHT_EAR_TRAGUS_INDEX]
         head_width_px = calculate_pixel_distance(left_ear, right_ear, w_front, h_front)
@@ -87,8 +66,7 @@ def get_measurements_from_images(image_paths: Dict[str, str]) -> Dict[str, float
         head_height_px = calculate_pixel_distance(forehead_top, chin_bottom, w_front, h_front)
         head_height_cm = head_height_px / pixel_to_cm_ratio
 
-        # --- 4. Calculate Head Depth from Side Image ---
-        head_length_cm = head_height_cm * 1.2  # Start with a reasonable estimate
+        head_length_cm = head_height_cm * 1.2  
         
         if side_image_path:
             image_side = cv2.imread(side_image_path)
@@ -102,10 +80,9 @@ def get_measurements_from_images(image_paths: Dict[str, str]) -> Dict[str, float
                     ear = landmarks_side.landmark[SIDE_PROFILE_EAR_TRAGUS_INDEX]
                     depth_px = abs(nose_tip.x - ear.x) * w_side
                     
-                    # Nose-to-ear is roughly half the head depth. We multiply by a factor.
                     estimated_depth_cm = (depth_px / pixel_to_cm_ratio) * 2.0 
                     
-                    if 15 < estimated_depth_cm < 25: # Use only if result is reasonable
+                    if 15 < estimated_depth_cm < 25:
                         head_length_cm = estimated_depth_cm
                         print(f"INFO: Calculated head depth from side image: {head_length_cm:.2f} cm")
                     else:
@@ -117,7 +94,6 @@ def get_measurements_from_images(image_paths: Dict[str, str]) -> Dict[str, float
         else:
             print("WARNING: No side image provided. Using estimate for head depth.")
             
-        # --- 5. Assemble and Return Measurements ---
         return {
             'head_width': head_width_cm,
             'head_length': head_length_cm,
@@ -138,9 +114,6 @@ def get_measurements_from_images(image_paths: Dict[str, str]) -> Dict[str, float
         }
 
 def get_surface_measurements_from_model(model_path: str, initial_measurements: Dict[str, float]) -> Dict[str, float]:
-    """
-    Refines measurements using the reshaped 3D model.
-    """
     print("--- Calculating final measurements from reconstructed mesh ---")
     try:
         mesh = trimesh.load(model_path)

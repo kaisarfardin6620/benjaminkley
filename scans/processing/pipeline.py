@@ -6,13 +6,9 @@ import os
 import traceback
 
 class PipelineError(Exception):
-    """Custom exception for pipeline failures."""
     pass
 
 def run_full_scan_pipeline(scan) -> dict:
-    """
-    Runs the full processing pipeline for a scan with an improved and more logical flow.
-    """
     try:
         image_paths = {
             "front": scan.image_front.path,
@@ -25,7 +21,6 @@ def run_full_scan_pipeline(scan) -> dict:
         gender = predict_gender(scan.image_front.path)
         print(f"Predicted gender: {gender}")
 
-        # --- NEW, MORE LOGICAL FLOW ---
         print("Pipeline Step 2: Calculating initial measurements from 2D images...")
         initial_measurements = get_measurements_from_images(image_paths)
         if not initial_measurements:
@@ -50,7 +45,6 @@ def run_full_scan_pipeline(scan) -> dict:
         
         print("Pipeline Step 5: Saving 3D model to cloud storage...")
         with open(local_model_path, 'rb') as f:
-            # The filename is now correctly passed from the reconstruction step
             scan.processed_3d_model.save(output_filename, File(f), save=False)
         
         print("Pipeline Step 6: Cleaning up local temporary file...")
