@@ -32,4 +32,3 @@ elif [ "$COMMAND" = "beat" ]; then
 else
     echo "Unknown command: $COMMAND. Please use 'web', 'worker', or 'beat'."
     exit 1
-fi
