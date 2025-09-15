@@ -82,7 +82,7 @@ if USE_S3_STORAGE:
     AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
     AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
     AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')
-    AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME', 'us-east-1')
+    AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME', 'ap-south-1')
     AWS_S3_ADDRESSING_STYLE = "virtual"
     AWS_DEFAULT_ACL = 'private'
     AWS_S3_SIGNATURE_VERSION = 's3v4'
