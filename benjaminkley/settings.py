@@ -6,9 +6,13 @@ import dj_database_url
 
 load_dotenv()
 
+AWS_S3_ADDRESSING_STYLE = "virtual"
+
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv('SECRET_KEY')
+#DEBUG = True
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 ROOT_URLCONF = 'benjaminkley.urls'
 

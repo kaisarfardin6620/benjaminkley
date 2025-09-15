@@ -79,7 +79,6 @@ class SiteContentSerializer(serializers.ModelSerializer):
     class Meta:
         model = SiteContent
         fields = '__all__'
-        read_only_fields = ('slug',)
 
 class AdminProfileSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source='get_full_name')

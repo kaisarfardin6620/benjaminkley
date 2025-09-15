@@ -11,3 +11,5 @@ class AdminNotificationAdmin(admin.ModelAdmin):
 class SiteContentAdmin(admin.ModelAdmin):
     list_display = ('title', 'slug', 'updated_at')
     prepopulated_fields = {'slug': ('title',)}
+
+    list_display_links = ('title',)
