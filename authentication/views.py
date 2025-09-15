@@ -40,6 +40,7 @@ def send_otp_email(user, otp, purpose="account verification"):
 class UserSignupAPIView(APIView):
     permission_classes = [AllowAny]
     parser_classes = [MultiPartParser, FormParser]
+    
     def post(self, request):
         serializer = SignupSerializer(data=request.data)
         if serializer.is_valid():
@@ -49,6 +50,7 @@ class UserSignupAPIView(APIView):
             send_otp_email(user, otp, purpose="email verification") 
             
             AdminNotification.objects.create(
+                notification_type=AdminNotification.NotificationType.NEW_USER,
                 message=f"New user signed up and is now active: {user.get_full_name()} ({user.email})."
             )
 
@@ -59,6 +61,7 @@ class UserSignupAPIView(APIView):
             )
 
             return Response({"message": "User registered successfully. An OTP has been sent to verify your email."}, status=status.HTTP_201_CREATED)
+        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class VerifySignupOTPView(APIView):

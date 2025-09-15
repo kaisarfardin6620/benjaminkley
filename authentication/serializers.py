@@ -182,10 +182,10 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         try:
             user = User.objects.get(username__iexact=username)
         except User.DoesNotExist:
-            raise serializers.ValidationError('No active account found with the given credentials.')
+            raise serializers.ValidationError('You have entered a wrong username.')
 
         if not user.check_password(password):
-            raise serializers.ValidationError('No active account found with the given credentials.')
+            raise serializers.ValidationError('You have entered a wrong password.')
         
         if not user.is_active:
              raise serializers.ValidationError('This account is not active. Please verify your email first.')
@@ -225,7 +225,10 @@ class SetNewPasswordSerializer(serializers.Serializer):
         if data['new_password'] != data['new_password_confirmation']:
             raise serializers.ValidationError({"new_password_confirmation": "Passwords do not match."})
         if PasswordValidator.validate_breached_password(data['new_password']):
-            raise serializers.ValidationError({"new_password": "This password has been found in a data breach."})
+            raise serializers.ValidationError({
+                "new_password": "This password is too common and has been seen before. Please choose a more unique password."
+            })
+            
         return data
     
 class DeleteAccountSerializer(serializers.Serializer):

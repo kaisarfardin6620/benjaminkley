@@ -4,6 +4,7 @@ from .models import Scan
 from .processing.pipeline import run_full_scan_pipeline, PipelineError
 from decimal import Decimal
 from notifications.utils import create_and_send_notification
+from dashboard.models import AdminNotification
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +13,11 @@ def process_scan_and_save(scan_id: str):
     logger.info(f"Starting processing for scan {scan_id}")
     scan = Scan.objects.get(id=scan_id)
     try:
+        AdminNotification.objects.create(
+            notification_type=AdminNotification.NotificationType.NEW_SCAN,
+            message=f"User {scan.user.get_full_name()} has submitted a new scan for processing: '{scan.name}'."
+        )
+
         results = run_full_scan_pipeline(scan)
         measurements = results.get('measurements', {})
         

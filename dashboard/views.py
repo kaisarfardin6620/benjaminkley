@@ -18,6 +18,9 @@ from contact_support.models import ContactMessage
 from .models import *
 from scans.tasks import process_scan_and_save
 from notifications.utils import create_and_send_notification
+from .models import AdminNotification, SiteContent
+from fcm_django.models import FCMDevice
+from firebase_admin import messaging
 
 class DashboardStatsAPIView(APIView):
     permission_classes = [IsAdminUser]
@@ -87,6 +90,18 @@ class UserManagementViewSet(viewsets.ModelViewSet):
 
         return Response({'status': 'User blocked successfully.'})
 
+    @action(detail=True, methods=['post'], url_path='unblock')
+    def unblock_user(self, request, pk=None):
+        profile = get_object_or_404(UserProfile, user_id=pk)
+        profile.status = 'Active'
+        profile.save()
+        create_and_send_notification(
+            user=profile.user,
+            title="Account Re-activated",
+            message="Your account has been re-activated and you can now use the app."
+        )
+        return Response({'status': 'User unblocked successfully.'})
+
     @action(detail=True, methods=['post'], url_path='approve')
     def approve_user(self, request, pk=None):
         profile = get_object_or_404(UserProfile, user_id=pk)
@@ -133,27 +148,56 @@ class ContactMessageViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'email', 'message']
     ordering_fields = ['created_at', 'is_replied']
 
-class PushNotificationViewSet(viewsets.ModelViewSet):
+
+class PushNotificationHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAdminUser]
-    serializer_class = PushNotificationSerializer
-    queryset = PushNotification.objects.all().order_by('-sent_at')
+    serializer_class = AdminNotificationSerializer
+    
+    queryset = AdminNotification.objects.filter(
+        notification_type=AdminNotification.NotificationType.PUSH_SENT
+    ).order_by('-created_at')
     
     filter_backends = [filters.SearchFilter]
     search_fields = ['title', 'message']
+class SendPushNotificationAPIView(APIView):
+    permission_classes = [IsAdminUser]
+    
+    def post(self, request, *args, **kwargs):
+        serializer = PushNotificationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        title = serializer.validated_data['title']
+        message = serializer.validated_data['message']
 
-    def perform_create(self, serializer):
-        print(f"--- SIMULATING PUSH NOTIFICATION ---")
-        print(f"Title: {serializer.validated_data['title']}")
-        print(f"Message: {serializer.validated_data['message']}")
-        serializer.save()
-
-class AdminNotificationViewSet(viewsets.ReadOnlyModelViewSet):
+        all_devices = FCMDevice.objects.filter(active=True)
+        if all_devices:
+            all_devices.send_message(
+                messaging.Message(
+                    notification=messaging.Notification(title=title, body=message)
+                )
+            )
+        
+        AdminNotification.objects.create(
+            notification_type=AdminNotification.NotificationType.PUSH_SENT,
+            title=title,
+            message=message,
+            is_read=True
+        )
+        return Response({"status": f"Push notification has been sent to {all_devices.count()} devices."}, status=status.HTTP_200_OK)
+class AdminNotificationViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     serializer_class = AdminNotificationSerializer
     queryset = AdminNotification.objects.all().order_by('-created_at')
-    @action(detail=False, methods=['post'], url_path='mark-all-read')
-    def mark_all_as_read(self, request):
-        self.get_queryset().update(is_read=True)
+    
+    filterset_fields = ['is_read', 'notification_type']
+
+    @action(detail=False, methods=['post'], url_path='mark-as-read')
+    def mark_as_read(self, request):
+        ids_to_mark = request.data.get('ids', [])
+        if not isinstance(ids_to_mark, list):
+            return Response({"error": "Payload must be a list of IDs, e.g., {\"ids\": [1, 5, 10]}"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        self.get_queryset().filter(id__in=ids_to_mark).update(is_read=True)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 class SiteContentViewSet(viewsets.ModelViewSet):

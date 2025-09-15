@@ -18,6 +18,7 @@ class SubmitContactMessageView(generics.CreateAPIView):
         self.perform_create(serializer)
 
         AdminNotification.objects.create(
+            notification_type=AdminNotification.NotificationType.NEW_CONTACT,
             message=f"New contact message received from {request.data.get('name')} ({request.data.get('email')})."
         )
         

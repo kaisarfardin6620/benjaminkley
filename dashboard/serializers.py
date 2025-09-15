@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 from authentication.models import UserProfile
 from scans.models import Scan
 from contact_support.models import ContactMessage
-from .models import PushNotification, AdminNotification, SiteContent
+from .models import AdminNotification, SiteContent
 from authentication.serializers import PasswordValidator
 
 
@@ -36,29 +36,44 @@ class DashboardUserSerializer(serializers.ModelSerializer):
 
 
 class DashboardScanSerializer(serializers.ModelSerializer):
+    scan_id = serializers.UUIDField(source='id', read_only=True)
     name = serializers.CharField(source='user.get_full_name', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
     submission_date = serializers.DateTimeField(source='created_at', read_only=True)
     
+    reconstructed_3d_head = serializers.FileField(source='processed_3d_model', use_url=True, read_only=True)
+    image_front_url = serializers.ImageField(source='image_front', use_url=True, read_only=True)
+    image_back_url = serializers.ImageField(source='image_back', use_url=True, read_only=True)
+    image_left_url = serializers.ImageField(source='image_left', use_url=True, read_only=True)
+    image_right_url = serializers.ImageField(source='image_right', use_url=True, read_only=True)
+    
+    head_width = serializers.CharField()
+    head_length = serializers.CharField()
+    ear_to_ear = serializers.CharField()
+    eye_to_eye = serializers.CharField()
+    
     class Meta:
         model = Scan
-        fields = ('id', 'name', 'email', 'submission_date', 'status', 'processed_3d_model')
+        fields = (
+            'scan_id', 'name', 'email', 'submission_date', 'status',
+            'head_width', 'head_length', 'ear_to_ear', 'eye_to_eye',
+            'reconstructed_3d_head', 'image_front_url', 'image_back_url',
+            'image_left_url', 'image_right_url'
+        )
 
 class DashboardContactMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ContactMessage
         fields = '__all__'
 
-class PushNotificationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = PushNotification
-        fields = '__all__'
-        read_only_fields = ('sent_at',)
+class PushNotificationSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=255)
+    message = serializers.CharField()
 
 class AdminNotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = AdminNotification
-        fields = '__all__'
+        fields = ('id', 'notification_type', 'title', 'message', 'is_read', 'created_at')
 
 class SiteContentSerializer(serializers.ModelSerializer):
     class Meta:

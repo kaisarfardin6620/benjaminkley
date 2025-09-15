@@ -1,15 +1,11 @@
 from django.contrib import admin
-from .models import PushNotification, AdminNotification, SiteContent
-
-@admin.register(PushNotification)
-class PushNotificationAdmin(admin.ModelAdmin):
-    list_display = ('title', 'sent_to', 'sent_at')
-    readonly_fields = ('title', 'message', 'sent_to', 'sent_at')
-    def has_add_permission(self, request): return False
+from .models import AdminNotification, SiteContent
 
 @admin.register(AdminNotification)
 class AdminNotificationAdmin(admin.ModelAdmin):
-    list_display = ('message', 'is_read', 'created_at')
+    list_display = ('notification_type', 'title', 'message', 'is_read', 'created_at')
+    list_filter = ('notification_type', 'is_read', 'created_at')
+    readonly_fields = ('notification_type', 'title', 'message', 'created_at')
 
 @admin.register(SiteContent)
 class SiteContentAdmin(admin.ModelAdmin):
