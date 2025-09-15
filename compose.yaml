@@ -1,14 +1,15 @@
 services:
+
   app:
     build: .
     container_name: benjaminkley-app
     ports:
       - "8000:8000"
     volumes:
-      # Use named volumes for persistent data and outputs only
+      - .:/app
+      - /home/fkaisar/ai_models:/app/ai_models:ro
       - staticfiles:/app/staticfiles
       - media_volume:/app/media
-      - scans_outputs_volume:/app/scans/outputs
     env_file: .env
     environment:
       - PORT=8000
@@ -23,8 +24,9 @@ services:
     build: .
     container_name: benjaminkley-celery
     volumes:
+      - .:/app
+      - /home/fkaisar/ai_models:/app/ai_models:ro
       - media_volume:/app/media
-      - scans_outputs_volume:/app/scans/outputs
     env_file: .env
     environment:
       - USE_S3_STORAGE=True
@@ -38,7 +40,7 @@ services:
     build: .
     container_name: benjaminkley-celery-beat
     volumes:
-      - scans_outputs_volume:/app/scans/outputs
+      - .:/app
     env_file: .env
     networks:
       - app-network
@@ -55,7 +57,6 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - staticfiles:/app/staticfiles:ro
       - media_volume:/app/media:ro
-      - scans_outputs_volume:/app/scans/outputs:ro
     depends_on:
       app:
         condition: service_started
@@ -69,4 +70,3 @@ networks:
 volumes:
   staticfiles:
   media_volume:
-  scans_outputs_volume:
