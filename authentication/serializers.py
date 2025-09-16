@@ -119,7 +119,7 @@ class ProfileSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(source='user.first_name')
     last_name = serializers.CharField(source='user.last_name')
     email = serializers.EmailField(source='user.email', read_only=True)
-    profile_picture = serializers.ImageField(use_url=True, read_only=True)
+    profile_picture = serializers.SerializerMethodField() # <-- THIS IS THE FIX
 
     class Meta:
         model = UserProfile
@@ -127,6 +127,13 @@ class ProfileSerializer(serializers.ModelSerializer):
             'first_name', 'last_name', 'email', 'profile_picture', 'role',
             'clinic_name', 'date_of_birth', 'contact_number', 'address', 'status'
         ]
+
+    # ADDED THIS METHOD
+    def get_profile_picture(self, obj):
+        if obj.profile_picture:
+            return f"{settings.SERVER_BASE_URL}{obj.profile_picture.url}"
+        return None
+
 class UpdateProfileSerializer(serializers.Serializer):
     full_name = serializers.CharField(required=False, write_only=True)
     role = RoleChoiceField(choices=Roles.choices, required=False)

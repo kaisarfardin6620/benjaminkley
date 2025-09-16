@@ -5,6 +5,7 @@ from scans.models import Scan
 from contact_support.models import ContactMessage
 from .models import AdminNotification, SiteContent
 from authentication.serializers import PasswordValidator
+from django.conf import settings # <-- ADDED THIS IMPORT
 
 
 class DashboardUserSerializer(serializers.ModelSerializer):
@@ -13,14 +14,20 @@ class DashboardUserSerializer(serializers.ModelSerializer):
     date_of_birth = serializers.DateField(source='profile.date_of_birth', read_only=True)
     number_of_scan = serializers.SerializerMethodField()
     
-    profile_picture = serializers.ImageField(source='profile.profile_picture', read_only=True, use_url=True)
+    profile_picture = serializers.SerializerMethodField() # <-- THIS IS THE FIX
     
     class Meta:
         model = User
         fields = (
-            'id', 'first_name', 'last_name', 'email', 'profile_picture', # <-- Field added here
+            'id', 'first_name', 'last_name', 'email', 'profile_picture',
             'role', 'date_of_birth', 'number_of_scan', 'status', 'date_joined'
         )
+
+    # ADDED THIS METHOD
+    def get_profile_picture(self, obj):
+        if obj.profile.profile_picture:
+            return f"{settings.SERVER_BASE_URL}{obj.profile.profile_picture.url}"
+        return None
     
     def get_number_of_scan(self, obj):
         return obj.scans.count()
@@ -41,11 +48,12 @@ class DashboardScanSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source='user.email', read_only=True)
     submission_date = serializers.DateTimeField(source='created_at', read_only=True)
     
-    reconstructed_3d_head = serializers.FileField(source='processed_3d_model', use_url=True, read_only=True)
-    image_front_url = serializers.ImageField(source='image_front', use_url=True, read_only=True)
-    image_back_url = serializers.ImageField(source='image_back', use_url=True, read_only=True)
-    image_left_url = serializers.ImageField(source='image_left', use_url=True, read_only=True)
-    image_right_url = serializers.ImageField(source='image_right', use_url=True, read_only=True)
+    # --- THESE ARE THE FIXES ---
+    reconstructed_3d_head = serializers.SerializerMethodField()
+    image_front_url = serializers.SerializerMethodField()
+    image_back_url = serializers.SerializerMethodField()
+    image_left_url = serializers.SerializerMethodField()
+    image_right_url = serializers.SerializerMethodField()
     
     head_width = serializers.CharField()
     head_length = serializers.CharField()
@@ -60,6 +68,33 @@ class DashboardScanSerializer(serializers.ModelSerializer):
             'reconstructed_3d_head', 'image_front_url', 'image_back_url',
             'image_left_url', 'image_right_url'
         )
+
+    # --- ADDED THESE METHODS ---
+    def get_reconstructed_3d_head(self, obj):
+        if obj.processed_3d_model:
+            return f"{settings.SERVER_BASE_URL}{obj.processed_3d_model.url}"
+        return None
+
+    def get_image_front_url(self, obj):
+        if obj.image_front:
+            return f"{settings.SERVER_BASE_URL}{obj.image_front.url}"
+        return None
+
+    def get_image_back_url(self, obj):
+        if obj.image_back:
+            return f"{settings.SERVER_BASE_URL}{obj.image_back.url}"
+        return None
+
+    def get_image_left_url(self, obj):
+        if obj.image_left:
+            return f"{settings.SERVER_BASE_URL}{obj.image_left.url}"
+        return None
+
+    def get_image_right_url(self, obj):
+        if obj.image_right:
+            return f"{settings.SERVER_BASE_URL}{obj.image_right.url}"
+        return None
+
 
 class DashboardContactMessageSerializer(serializers.ModelSerializer):
     class Meta:
@@ -85,11 +120,17 @@ class AdminProfileSerializer(serializers.ModelSerializer):
     email = serializers.EmailField()
     contact_number = serializers.CharField(source='profile.contact_number')
     
-    profile_picture = serializers.ImageField(source='profile.profile_picture', use_url=True, read_only=True)
+    profile_picture = serializers.SerializerMethodField() # <-- THIS IS THE FIX
 
     class Meta:
         model = User
         fields = ('full_name', 'email', 'contact_number', 'profile_picture')
+
+    # ADDED THIS METHOD
+    def get_profile_picture(self, obj):
+        if obj.profile.profile_picture:
+            return f"{settings.SERVER_BASE_URL}{obj.profile.profile_picture.url}"
+        return None
 
 
 class AdminUpdateProfileSerializer(serializers.ModelSerializer):
