@@ -1,3 +1,4 @@
+# --- Builder Stage ---
 FROM python:3.12-slim AS builder
 
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
@@ -18,14 +19,17 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 
+# --- Final Stage ---
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 
+# Added 'curl' for the healthcheck
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
     gosu \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 RUN addgroup --system --gid 1000 app && adduser --system --uid 1000 --ingroup app app
@@ -43,7 +47,7 @@ RUN chmod +x /app/docker-entrypoint.sh
 RUN mkdir -p /app/media /app/staticfiles /app/scans/outputs \
     && chown -R app:app /app
 
-#USER app
+USER app
 
 EXPOSE 8000
 CMD ["/app/docker-entrypoint.sh", "web"]

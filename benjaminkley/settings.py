@@ -75,20 +75,25 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 
 if USE_S3_STORAGE:
+    # --- S3 Storage Configuration ---
     DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
     AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')
     AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME')
     AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
     AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
     AWS_S3_ADDRESSING_STYLE = "virtual"
+
+    # --- Configuration for Private Buckets (generates temporary, secure URLs) ---
     #AWS_DEFAULT_ACL = 'private'
     AWS_S3_SIGNATURE_VERSION = 's3v4'
-    AWS_QUERYSTRING_AUTH = True  
-    AWS_QUERYSTRING_EXPIRE = 3600  
+    AWS_QUERYSTRING_AUTH = True  # Generates presigned URLs
+    AWS_QUERYSTRING_EXPIRE = 3600  # URL valid for 1 hour (in seconds)
 
+    # When using S3, MEDIA_ROOT is not needed and MEDIA_URL is handled by the storage backend
     MEDIA_URL = f'https://{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com/'
 
 else:
+    # --- Local Storage Configuration ---
     MEDIA_URL = '/media/'
     MEDIA_ROOT = '/app/media'
 

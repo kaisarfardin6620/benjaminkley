@@ -1,15 +1,23 @@
 services:
-
   app:
     build: .
     container_name: benjaminkley-app
     ports:
       - "8000:8000"
     volumes:
-      - .:/app
-      - /home/fkaisar/ai_models:/app/ai_models:ro
-      - staticfiles:/app/staticfiles
-      - media_volume:/app/media
+      - type: bind
+        source: .
+        target: /app
+      - type: bind
+        source: ./ai_models
+        target: /app/ai_models
+        read_only: true
+      - type: volume
+        source: staticfiles
+        target: /app/staticfiles
+      - type: bind
+        source: ./media
+        target: /app/media
     env_file: .env
     environment:
       - PORT=8000
@@ -18,14 +26,20 @@ services:
     dns:
       - 8.8.8.8
     command: ["/app/docker-entrypoint.sh", "web"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/admin/login/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   celery:
     build: .
     container_name: benjaminkley-celery
     volumes:
       - .:/app
-      - /home/fkaisar/ai_models:/app/ai_models:ro
-      - media_volume:/app/media
+      - ./ai_models:/app/ai_models:ro
+      - ./media:/app/media
     env_file: .env
     networks:
       - app-network
@@ -51,12 +65,23 @@ services:
     ports:
       - "8080:80"
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - staticfiles:/app/staticfiles:ro
-      - media_volume:/app/media:ro
+      # THIS IS THE FINAL FIX:
+      # Mounts our site-specific config file into the correct directory.
+      - type: bind
+        source: ./benjaminkley.conf
+        target: /etc/nginx/conf.d/default.conf
+        read_only: true
+      - type: volume
+        source: staticfiles
+        target: /app/staticfiles
+        read_only: true
+      - type: bind
+        source: ./media
+        target: /app/media
+        read_only: true
     depends_on:
       app:
-        condition: service_started
+        condition: service_healthy
     networks:
       - app-network
 
@@ -65,5 +90,4 @@ networks:
     driver: bridge
 
 volumes:
-  staticfiles:
-  media_volume:
+  staticfiles: {}

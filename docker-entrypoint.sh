@@ -4,7 +4,7 @@
 set -e
 . /opt/venv/bin/activate
 
-chown -R app:app /app/media /app/staticfiles /app/scans
+# THE FAILING 'chown' COMMAND HAS BEEN REMOVED FROM HERE
 
 COMMAND=$1
 echo "--- Received command: $COMMAND ---"
@@ -32,3 +32,4 @@ elif [ "$COMMAND" = "beat" ]; then
 else
     echo "Unknown command: $COMMAND. Please use 'web', 'worker', or 'beat'."
     exit 1
+fi
