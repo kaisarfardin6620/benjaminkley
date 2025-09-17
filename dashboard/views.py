@@ -21,6 +21,7 @@ from notifications.utils import create_and_send_notification
 from .models import AdminNotification, SiteContent
 from fcm_django.models import FCMDevice
 from firebase_admin import messaging
+from .pagination import CustomDashboardPagination 
 
 class DashboardStatsAPIView(APIView):
     permission_classes = [IsAdminUser]
@@ -75,6 +76,7 @@ class UserManagementViewSet(viewsets.ModelViewSet):
     queryset = User.objects.select_related('profile').prefetch_related('scans').order_by('-date_joined')
     filter_backends = [filters.SearchFilter]
     search_fields = ['first_name', 'last_name', 'email']
+    pagination_class = CustomDashboardPagination
 
     @action(detail=True, methods=['post'], url_path='block')
     def block_user(self, request, pk=None):
@@ -124,6 +126,7 @@ class ScanManagementViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'user__email', 'user__first_name', 'user__last_name']
     ordering_fields = ['created_at', 'status']
+    pagination_class = CustomDashboardPagination 
 
     @action(detail=True, methods=['post'], url_path='rescan')
     def request_rescan(self, request, pk=None):
@@ -147,6 +150,7 @@ class ContactMessageViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'email', 'message']
     ordering_fields = ['created_at', 'is_replied']
+    pagination_class = CustomDashboardPagination 
 
 
 class PushNotificationHistoryViewSet(viewsets.ReadOnlyModelViewSet):
@@ -159,6 +163,8 @@ class PushNotificationHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     
     filter_backends = [filters.SearchFilter]
     search_fields = ['title', 'message']
+    pagination_class = CustomDashboardPagination 
+
 class SendPushNotificationAPIView(APIView):
     permission_classes = [IsAdminUser]
     
@@ -190,6 +196,7 @@ class AdminNotificationViewSet(viewsets.ModelViewSet):
     queryset = AdminNotification.objects.all().order_by('-created_at')
     
     filterset_fields = ['is_read', 'notification_type']
+    pagination_class = CustomDashboardPagination 
 
     @action(detail=False, methods=['post'], url_path='mark-as-read')
     def mark_as_read(self, request):

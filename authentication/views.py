@@ -1,3 +1,4 @@
+import profile
 from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
@@ -174,8 +175,7 @@ class ProfilePictureUploadAPIView(APIView):
         uploaded_file = request.FILES['profile_picture']
         profile.profile_picture = uploaded_file
         profile.save()
-        return Response({"message": "Profile picture uploaded successfully."}, status=status.HTTP_200_OK)
-        
+        serializer = ProfileSerializer(profile) 
         return Response(serializer.data, status=status.HTTP_200_OK)
     
 class ChangePasswordAPIView(APIView):

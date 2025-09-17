@@ -4,11 +4,11 @@ from rest_framework.permissions import IsAuthenticated
 from .models import Scan
 from .serializers import ScanCreateSerializer, ScanDetailSerializer
 from .tasks import process_scan_and_save
-from .pagination import ScanListPagination
+from dashboard.pagination import CustomDashboardPagination 
 
 class ScanViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
-    pagination_class = ScanListPagination
+    pagination_class = CustomDashboardPagination 
 
     def get_queryset(self):
         return Scan.objects.filter(user=self.request.user)
@@ -27,15 +27,11 @@ class ScanViewSet(viewsets.ModelViewSet):
         self.perform_create(serializer)
         scan = serializer.instance
         
-        # Synchronous processing for debugging (remove for production)
         try:
-            process_scan_and_save(str(scan.id))  # No .delay() for sync execution
+            process_scan_and_save.delay(str(scan.id))
         except Exception as e:
-            # Log error but let task handle status updates
             print(f"Error processing scan {scan.id}: {e}")
         
-        # For production, use async:
-        # process_scan_and_save.delay(str(scan.id))
-        
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        detail_serializer = ScanDetailSerializer(scan) 
+        headers = self.get_success_headers(detail_serializer.data)
+        return Response(detail_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
