@@ -32,6 +32,16 @@ class ScanViewSet(viewsets.ModelViewSet):
         except Exception as e:
             print(f"Error processing scan {scan.id}: {e}")
         
-        detail_serializer = ScanDetailSerializer(scan) 
-        headers = self.get_success_headers(detail_serializer.data)
-        return Response(detail_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        detail_serializer = ScanDetailSerializer(scan)
+        
+        response_data = {
+            "scan_id": detail_serializer.data.get('scan_id'),
+            "status": detail_serializer.data.get('status'),
+            "image_front_url": detail_serializer.data.get('image_front_url'),
+            "image_back_url": detail_serializer.data.get('image_back_url'),
+            "image_left_url": detail_serializer.data.get('image_left_url'),
+            "image_right_url": detail_serializer.data.get('image_right_url'),
+        }
+
+        headers = self.get_success_headers(response_data)
+        return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
