@@ -14,8 +14,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from .models import AuthToken, UserProfile, PasswordHistory
 from .serializers import (
     SignupSerializer, OTPVerificationSerializer, ChangePasswordSerializer, 
-    ProfileSerializer, UpdateProfileSerializer, ProfilePictureSerializer, 
-    ResendVerificationSerializer, MyTokenObtainPairSerializer, LogoutSerializer,
+    ProfileSerializer, UpdateProfileSerializer,ResendVerificationSerializer, MyTokenObtainPairSerializer, LogoutSerializer,
     PasswordResetRequestSerializer, PasswordResetVerifyOTPSerializer, SetNewPasswordSerializer,DeleteAccountSerializer
 )
 import random
@@ -150,33 +149,17 @@ class UpdateProfileAPIView(APIView):
         if serializer.is_valid():
             serializer.save()
 
+            profile.refresh_from_db()
+
             create_and_send_notification(
                 user=user,
                 title="Profile Updated",
                 message="Your profile details have been successfully updated."
             )
-
             return Response(ProfileSerializer(profile, context={'request': request}).data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class ProfilePictureUploadAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]
 
-    def post(self, request, *args, **kwargs):
-        profile, _ = UserProfile.objects.get_or_create(user=request.user)
-
-        if 'profile_picture' not in request.FILES:
-            return Response(
-                {"error": "No 'profile_picture' file was provided in the form-data."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        uploaded_file = request.FILES['profile_picture']
-        profile.profile_picture = uploaded_file
-        profile.save()
-        
-        return Response({"message": "Profile picture uploaded successfully."}, status=status.HTTP_200_OK)
     
 class ChangePasswordAPIView(APIView):
     permission_classes = [IsAuthenticated]

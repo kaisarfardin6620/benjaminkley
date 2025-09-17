@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'storages',
     'notifications',
     'fcm_django',
+    'django_filters',
 ]
 
 MIDDLEWARE = [

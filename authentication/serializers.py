@@ -135,7 +135,9 @@ class ProfileSerializer(serializers.ModelSerializer):
         return None
 
 class UpdateProfileSerializer(serializers.Serializer):
-    full_name = serializers.CharField(required=False, write_only=True)
+    first_name = serializers.CharField(required=False)
+    last_name = serializers.CharField(required=False)
+    profile_picture = serializers.ImageField(required=False)
     role = RoleChoiceField(choices=Roles.choices, required=False)
     clinic_name = serializers.CharField(required=False)
     date_of_birth = serializers.DateField(required=False)
@@ -143,20 +145,13 @@ class UpdateProfileSerializer(serializers.Serializer):
 
     def update(self, instance, validated_data):
         profile = instance.profile
-
-        if 'full_name' in validated_data:
-            full_name = validated_data['full_name'].strip()
-            parts = full_name.split(' ', 1)
-            instance.first_name = parts[0]
-            instance.last_name = parts[1] if len(parts) > 1 else ''
-        if 'role' in validated_data:
-            profile.role = validated_data['role']
-        if 'clinic_name' in validated_data:
-            profile.clinic_name = validated_data['clinic_name']
-        if 'date_of_birth' in validated_data:
-            profile.date_of_birth = validated_data['date_of_birth']
-        if 'address' in validated_data:
-            profile.address = validated_data['address']
+        instance.first_name = validated_data.get('first_name', instance.first_name)
+        instance.last_name = validated_data.get('last_name', instance.last_name)
+        profile.profile_picture = validated_data.get('profile_picture', profile.profile_picture)
+        profile.role = validated_data.get('role', profile.role)
+        profile.clinic_name = validated_data.get('clinic_name', profile.clinic_name)
+        profile.date_of_birth = validated_data.get('date_of_birth', profile.date_of_birth)
+        profile.address = validated_data.get('address', profile.address)
 
         instance.save()  
         profile.save()   

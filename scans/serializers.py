@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import Scan
-from django.conf import settings # <-- ADDED THIS IMPORT
+from django.conf import settings
 
 class ScanCreateSerializer(serializers.ModelSerializer):
     class Meta:
@@ -22,12 +22,7 @@ class ScanDetailSerializer(serializers.ModelSerializer):
     Date_of_Scan = serializers.DateTimeField(source='created_at', format="%B %d, %Y", read_only=True)
     status = serializers.CharField()
     
-    # --- THESE ARE THE FIXES ---
-    thumbnail_image = serializers.SerializerMethodField()
-    image_front_url = serializers.SerializerMethodField()
-    image_back_url = serializers.SerializerMethodField()
-    image_left_url = serializers.SerializerMethodField()
-    image_right_url = serializers.SerializerMethodField()
+    scan_images = serializers.SerializerMethodField()
     reconstructed_3d_head = serializers.SerializerMethodField()
     
     Head_Width = serializers.CharField(source='head_width')
@@ -44,16 +39,12 @@ class ScanDetailSerializer(serializers.ModelSerializer):
             'Name',
             'Date_of_Scan',
             'status',
-            'thumbnail_image',
+            'scan_images',
             'reconstructed_3d_head',
             'Head_Width',
             'Head_Length',
             'Ear_to_Ear',
             'Eye_to_Eye',
-            'image_front_url',
-            'image_back_url',
-            'image_left_url',
-            'image_right_url',
             'Notes',
             'Custom_Fit',
         )
@@ -63,33 +54,27 @@ class ScanDetailSerializer(serializers.ModelSerializer):
             return obj.user.get_full_name()
         return "N/A"
 
-    # --- ADDED THESE METHODS ---
-    def get_thumbnail_image(self, obj):
-        if obj.image_front:
-            return f"{settings.SERVER_BASE_URL}{obj.image_front.url}"
-        return None
+    def get_scan_images(self, obj):
+        images = []
+        thumbnail = None
 
-    def get_image_front_url(self, obj):
-        if obj.image_front:
-            return f"{settings.SERVER_BASE_URL}{obj.image_front.url}"
-        return None
-
-    def get_image_back_url(self, obj):
-        if obj.image_back:
-            return f"{settings.SERVER_BASE_URL}{obj.image_back.url}"
-        return None
-
-    def get_image_left_url(self, obj):
-        if obj.image_left:
-            return f"{settings.SERVER_BASE_URL}{obj.image_left.url}"
-        return None
-
-    def get_image_right_url(self, obj):
-        if obj.image_right:
-            return f"{settings.SERVER_BASE_URL}{obj.image_right.url}"
-        return None
+        if obj.image_front and hasattr(obj.image_front, 'url'):
+            url = f"{settings.SERVER_BASE_URL}{obj.image_front.url}"
+            images.append(url)
+            thumbnail = url
+        if obj.image_back and hasattr(obj.image_back, 'url'):
+            images.append(f"{settings.SERVER_BASE_URL}{obj.image_back.url}")
+        if obj.image_left and hasattr(obj.image_left, 'url'):
+            images.append(f"{settings.SERVER_BASE_URL}{obj.image_left.url}")
+        if obj.image_right and hasattr(obj.image_right, 'url'):
+            images.append(f"{settings.SERVER_BASE_URL}{obj.image_right.url}")
+        
+        return {
+            "thumbnail": thumbnail,
+            "all_images": images
+        }
 
     def get_reconstructed_3d_head(self, obj):
-        if obj.processed_3d_model:
+        if obj.processed_3d_model and hasattr(obj.processed_3d_model, 'url'):
             return f"{settings.SERVER_BASE_URL}{obj.processed_3d_model.url}"
         return None

@@ -21,6 +21,8 @@ services:
     env_file: .env
     environment:
       - PORT=8000
+      - TZ=UTC                          # <-- THE FIX: Timezone consistency
+      - MPLCONFIGDIR=/app/.cache/matplotlib # <-- THE FIX: Matplotlib cache
     networks:
       - app-network
     dns:
@@ -41,6 +43,9 @@ services:
       - ./ai_models:/app/ai_models:ro
       - ./media:/app/media
     env_file: .env
+    environment:
+      - TZ=UTC                          # <-- THE FIX: Timezone consistency
+      - MPLCONFIGDIR=/app/.cache/matplotlib # <-- THE FIX: Matplotlib cache
     networks:
       - app-network
     dns:
@@ -53,6 +58,9 @@ services:
     volumes:
       - .:/app
     env_file: .env
+    environment:
+      - TZ=UTC                          # <-- THE FIX: Timezone consistency
+      - MPLCONFIGDIR=/app/.cache/matplotlib # <-- THE FIX: Matplotlib cache
     networks:
       - app-network
     dns:
@@ -65,8 +73,6 @@ services:
     ports:
       - "8080:80"
     volumes:
-      # THIS IS THE FINAL FIX:
-      # Mounts our site-specific config file into the correct directory.
       - type: bind
         source: ./benjaminkley.conf
         target: /etc/nginx/conf.d/default.conf
@@ -91,3 +97,4 @@ networks:
 
 volumes:
   staticfiles: {}
+

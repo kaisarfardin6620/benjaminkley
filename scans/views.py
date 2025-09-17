@@ -4,11 +4,17 @@ from rest_framework.permissions import IsAuthenticated
 from .models import Scan
 from .serializers import ScanCreateSerializer, ScanDetailSerializer
 from .tasks import process_scan_and_save
-from dashboard.pagination import CustomDashboardPagination 
+from .pagination import ScanListPagination
+from django_filters.rest_framework import DjangoFilterBackend
+from .filters import ScanDateFilter
+
 
 class ScanViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
-    pagination_class = CustomDashboardPagination 
+    pagination_class = ScanListPagination  
+
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = ScanDateFilter
 
     def get_queryset(self):
         return Scan.objects.filter(user=self.request.user)
@@ -30,17 +36,14 @@ class ScanViewSet(viewsets.ModelViewSet):
         try:
             process_scan_and_save.delay(str(scan.id))
         except Exception as e:
-            print(f"Error processing scan {scan.id}: {e}")
+            print(f"Error queueing scan processing for {scan.id}: {e}")
         
-        detail_serializer = ScanDetailSerializer(scan)
+        detail_serializer = ScanDetailSerializer(scan, context={'request': request})
         
         response_data = {
             "scan_id": detail_serializer.data.get('scan_id'),
             "status": detail_serializer.data.get('status'),
-            "image_front_url": detail_serializer.data.get('image_front_url'),
-            "image_back_url": detail_serializer.data.get('image_back_url'),
-            "image_left_url": detail_serializer.data.get('image_left_url'),
-            "image_right_url": detail_serializer.data.get('image_right_url'),
+            "scan_images": detail_serializer.data.get('scan_images'), 
         }
 
         headers = self.get_success_headers(response_data)

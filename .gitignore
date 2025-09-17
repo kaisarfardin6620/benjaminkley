@@ -13,3 +13,4 @@ scans/inputs
 scans/outputs
 serviceAccountKey.json
 media
+.cache

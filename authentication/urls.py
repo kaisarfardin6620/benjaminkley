@@ -11,7 +11,6 @@ from .views import (
     PasswordResetRequestOTPView,
     VerifyPasswordResetOTPView,
     SetNewPasswordView, 
-    ProfilePictureUploadAPIView,
     ResendSignupOTPView,
     DeleteUserAccountAPIView,
 )
@@ -25,7 +24,6 @@ urlpatterns = [
     path('signup/resend-otp/', ResendSignupOTPView.as_view(), name='resend-signup-otp'),
     path('profile/', UserProfileAPIView.as_view(), name='user-profile'),
     path('profile/update/', UpdateProfileAPIView.as_view(), name='update-profile'),
-    path('profile/picture/upload/', ProfilePictureUploadAPIView.as_view(), name='profile-picture-upload'),
     path('password/change/', ChangePasswordAPIView.as_view(), name='password-change'),
     path('password/reset/request-otp/', PasswordResetRequestOTPView.as_view(), name='password-reset-request-otp'),
     path('password/reset/verify-otp/', VerifyPasswordResetOTPView.as_view(), name='password-reset-verify-otp'),

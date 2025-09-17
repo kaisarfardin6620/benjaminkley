@@ -1,3 +1,5 @@
+# dashboard/views.py
+
 from rest_framework import viewsets, filters, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -8,7 +10,7 @@ from django.contrib.auth.models import User
 from django.db.models.functions import TruncMonth
 from django.db.models import Count
 from django.utils import timezone
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404  
 from datetime import timedelta
 import calendar
 from .serializers import *
@@ -21,7 +23,10 @@ from notifications.utils import create_and_send_notification
 from .models import AdminNotification, SiteContent
 from fcm_django.models import FCMDevice
 from firebase_admin import messaging
-from .pagination import CustomDashboardPagination 
+from django_filters.rest_framework import DjangoFilterBackend
+from scans.filters import ScanDateFilter
+from scans.pagination import ScanListPagination
+
 
 class DashboardStatsAPIView(APIView):
     permission_classes = [IsAdminUser]
@@ -76,20 +81,13 @@ class UserManagementViewSet(viewsets.ModelViewSet):
     queryset = User.objects.select_related('profile').prefetch_related('scans').order_by('-date_joined')
     filter_backends = [filters.SearchFilter]
     search_fields = ['first_name', 'last_name', 'email']
-    pagination_class = CustomDashboardPagination
 
     @action(detail=True, methods=['post'], url_path='block')
     def block_user(self, request, pk=None):
         profile = get_object_or_404(UserProfile, user_id=pk)
         profile.status = 'Suspended'
         profile.save()
-
-        create_and_send_notification(
-            user=profile.user,
-            title="Account Suspended",
-            message="Your account has been suspended. Please contact support for more information."
-        )
-
+        create_and_send_notification(user=profile.user, title="Account Suspended", message="Your account has been suspended. Please contact support for more information.")
         return Response({'status': 'User blocked successfully.'})
 
     @action(detail=True, methods=['post'], url_path='unblock')
@@ -97,11 +95,7 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         profile = get_object_or_404(UserProfile, user_id=pk)
         profile.status = 'Active'
         profile.save()
-        create_and_send_notification(
-            user=profile.user,
-            title="Account Re-activated",
-            message="Your account has been re-activated and you can now use the app."
-        )
+        create_and_send_notification(user=profile.user, title="Account Re-activated", message="Your account has been re-activated and you can now use the app.")
         return Response({'status': 'User unblocked successfully.'})
 
     @action(detail=True, methods=['post'], url_path='approve')
@@ -109,24 +103,18 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         profile = get_object_or_404(UserProfile, user_id=pk)
         profile.status = 'Active'
         profile.save()
-
-        create_and_send_notification(
-            user=profile.user,
-            title="Account Approved",
-            message="Your account has been approved. You can now start using the app."
-        )
-
+        create_and_send_notification(user=profile.user, title="Account Approved", message="Your account has been approved. You can now start using the app.")
         return Response({'status': 'User approved successfully.'})
 
 class ScanManagementViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     serializer_class = DashboardScanSerializer
     queryset = Scan.objects.select_related('user').order_by('-created_at')
-    
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    pagination_class = ScanListPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_class = ScanDateFilter
     search_fields = ['name', 'user__email', 'user__first_name', 'user__last_name']
     ordering_fields = ['created_at', 'status']
-    pagination_class = CustomDashboardPagination 
 
     @action(detail=True, methods=['post'], url_path='rescan')
     def request_rescan(self, request, pk=None):
@@ -134,7 +122,6 @@ class ScanManagementViewSet(viewsets.ModelViewSet):
         scan.status = Scan.Status.PROCESSING
         scan.save()
         process_scan_and_save.delay(str(scan.id))
-
         create_and_send_notification(
             user=scan.user,
             title="Re-Scan Requested",
@@ -146,24 +133,19 @@ class ContactMessageViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     serializer_class = DashboardContactMessageSerializer
     queryset = ContactMessage.objects.all().order_by('-created_at')
-    
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'email', 'message']
     ordering_fields = ['created_at', 'is_replied']
-    pagination_class = CustomDashboardPagination 
 
 
 class PushNotificationHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAdminUser]
     serializer_class = AdminNotificationSerializer
-    
     queryset = AdminNotification.objects.filter(
         notification_type=AdminNotification.NotificationType.PUSH_SENT
     ).order_by('-created_at')
-    
     filter_backends = [filters.SearchFilter]
     search_fields = ['title', 'message']
-    pagination_class = CustomDashboardPagination 
 
 class SendPushNotificationAPIView(APIView):
     permission_classes = [IsAdminUser]
@@ -171,18 +153,13 @@ class SendPushNotificationAPIView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = PushNotificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
         title = serializer.validated_data['title']
         message = serializer.validated_data['message']
-
         all_devices = FCMDevice.objects.filter(active=True)
         if all_devices:
             all_devices.send_message(
-                messaging.Message(
-                    notification=messaging.Notification(title=title, body=message)
-                )
+                messaging.Message(notification=messaging.Notification(title=title, body=message))
             )
-        
         AdminNotification.objects.create(
             notification_type=AdminNotification.NotificationType.PUSH_SENT,
             title=title,
@@ -190,20 +167,18 @@ class SendPushNotificationAPIView(APIView):
             is_read=True
         )
         return Response({"status": f"Push notification has been sent to {all_devices.count()} devices."}, status=status.HTTP_200_OK)
+    
 class AdminNotificationViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     serializer_class = AdminNotificationSerializer
     queryset = AdminNotification.objects.all().order_by('-created_at')
-    
     filterset_fields = ['is_read', 'notification_type']
-    pagination_class = CustomDashboardPagination 
 
     @action(detail=False, methods=['post'], url_path='mark-as-read')
     def mark_as_read(self, request):
         ids_to_mark = request.data.get('ids', [])
         if not isinstance(ids_to_mark, list):
             return Response({"error": "Payload must be a list of IDs, e.g., {\"ids\": [1, 5, 10]}"}, status=status.HTTP_400_BAD_REQUEST)
-        
         self.get_queryset().filter(id__in=ids_to_mark).update(is_read=True)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -225,30 +200,21 @@ class AdminProfileView(APIView):
     def put(self, request):
         user = request.user
         profile = user.profile
-        
         full_name = request.data.get('full_name')
         if full_name:
             parts = full_name.strip().split(' ', 1)
             user.first_name = parts[0]
             user.last_name = parts[1] if len(parts) > 1 else ''
-        
         email = request.data.get('email')
         if email:
             user.email = email
             user.username = email
-        
         user.save()
-
-        profile_serializer = AdminUpdateProfileSerializer(
-            instance=profile,
-            data=request.data,
-            partial=True
-        )
+        profile_serializer = AdminUpdateProfileSerializer(instance=profile, data=request.data, partial=True)
         if profile_serializer.is_valid():
             profile_serializer.save()
             final_serializer = AdminProfileSerializer(user, context={'request': request})
             return Response(final_serializer.data)
-        
         return Response(profile_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class AdminChangePasswordView(APIView):
