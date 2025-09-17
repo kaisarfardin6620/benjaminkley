@@ -175,8 +175,8 @@ class ProfilePictureUploadAPIView(APIView):
         uploaded_file = request.FILES['profile_picture']
         profile.profile_picture = uploaded_file
         profile.save()
-        serializer = ProfileSerializer(profile) 
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        
+        return Response({"message": "Profile picture uploaded successfully."}, status=status.HTTP_200_OK)
     
 class ChangePasswordAPIView(APIView):
     permission_classes = [IsAuthenticated]
