@@ -5,6 +5,7 @@ from rest_framework.decorators import action
 from fcm_django.models import FCMDevice
 from .models import Notification
 from .serializers import NotificationSerializer, FCMDeviceSerializer
+from dashboard.pagination import CustomDashboardPagination
 
 class DeviceViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
@@ -19,7 +20,8 @@ class DeviceViewSet(viewsets.ModelViewSet):
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = NotificationSerializer
-
+    pagination_class = CustomDashboardPagination
+    
     def get_queryset(self):
         return Notification.objects.filter(user=self.request.user)
 
