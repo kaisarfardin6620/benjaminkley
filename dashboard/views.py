@@ -172,6 +172,7 @@ class AdminNotificationViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     serializer_class = AdminNotificationSerializer
     queryset = AdminNotification.objects.all().order_by('-created_at')
+    filter_backends = [DjangoFilterBackend]
     filterset_fields = ['is_read', 'notification_type']
 
     @action(detail=False, methods=['post'], url_path='mark-as-read')
