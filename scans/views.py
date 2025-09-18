@@ -7,11 +7,11 @@ from .tasks import process_scan_and_save
 from .pagination import ScanListPagination
 from django_filters.rest_framework import DjangoFilterBackend
 from .filters import ScanDateFilter
-
+from dashboard.pagination import CustomDashboardPagination
 
 class ScanViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
-    pagination_class = ScanListPagination  
+    pagination_class = CustomDashboardPagination
 
     filter_backends = [DjangoFilterBackend]
     filterset_class = ScanDateFilter
@@ -46,5 +46,5 @@ class ScanViewSet(viewsets.ModelViewSet):
             "scan_images": detail_serializer.data.get('scan_images'), 
         }
 
-        headers = self.get_success_headers(response_data)
+        headers = self.get_success_headers(detail_serializer.data)
         return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)

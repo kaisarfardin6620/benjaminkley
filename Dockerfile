@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+# THIS IS THE TYPO FIX: veno -> venv
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
@@ -24,7 +25,6 @@ FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 
-# Added 'curl' for the healthcheck
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
@@ -32,7 +32,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-RUN addgroup --system --gid 1000 app && adduser --system --uid 1000 --ingroup app app
+# This is the original fix for the home directory, which is still important
+RUN addgroup --system --gid 1000 app && adduser --system --uid 1000 --ingroup app --home /home/app app
 
 WORKDIR /app
 
