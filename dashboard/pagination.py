@@ -19,15 +19,8 @@ class CustomDashboardPagination(PageNumberPagination):
             previous_link = previous_link.replace(incorrect_base, settings.SERVER_BASE_URL)
 
         return Response({
-            'meta': {
-                'total': self.page.paginator.count,
-                'page': self.page.number,
-                'limit': self.get_page_size(self.request),
-                'totalPage': self.page.paginator.num_pages,
-            },
-            'links': {
-                'next': next_link,
-                'previous': previous_link,
-            },
-            'data': data
+            'count': self.page.paginator.count,
+            'next': next_link,
+            'previous': previous_link,
+            'results': data
         })
