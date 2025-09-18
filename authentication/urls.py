@@ -12,6 +12,7 @@ from .views import (
     VerifyPasswordResetOTPView,
     SetNewPasswordView, 
     ResendSignupOTPView,
+    ResendPasswordResetOTPView,
     DeleteUserAccountAPIView,
 )
 urlpatterns = [
@@ -26,6 +27,7 @@ urlpatterns = [
     path('profile/update/', UpdateProfileAPIView.as_view(), name='update-profile'),
     path('password/change/', ChangePasswordAPIView.as_view(), name='password-change'),
     path('password/reset/request-otp/', PasswordResetRequestOTPView.as_view(), name='password-reset-request-otp'),
+    path('password/reset/resend-otp/', ResendPasswordResetOTPView.as_view(), name='password-reset-resend-otp'),
     path('password/reset/verify-otp/', VerifyPasswordResetOTPView.as_view(), name='password-reset-verify-otp'),
     path('password/reset/set-new/', SetNewPasswordView.as_view(), name='password-reset-set-new'),
     path('profile/delete/', DeleteUserAccountAPIView.as_view(), name='delete-user-account'),

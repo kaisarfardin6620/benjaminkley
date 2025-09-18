@@ -197,6 +197,26 @@ class PasswordResetRequestOTPView(APIView):
             except User.DoesNotExist:
                 return Response({'error': 'No active account found with this email address.'}, status=status.HTTP_404_NOT_FOUND)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+class ResendPasswordResetOTPView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            try:
+                user = User.objects.get(email__iexact=email)
+                AuthToken.objects.filter(user=user, token_type='password_reset_otp', is_used=False).update(is_used=True)
+                
+                otp = generate_otp()
+                AuthToken.objects.create(user=user, otp_code=otp, token_type='password_reset_otp')
+                send_otp_email(user, otp, purpose="password reset")
+                
+                return Response({'message': 'New OTP for password reset has been sent to your email.'}, status=status.HTTP_200_OK)
+            except User.DoesNotExist:
+                return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class VerifyPasswordResetOTPView(APIView):
     permission_classes = [AllowAny]

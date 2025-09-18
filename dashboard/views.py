@@ -1,5 +1,6 @@
 # dashboard/views.py
 
+from httpx import request
 from rest_framework import viewsets, filters, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -180,11 +181,17 @@ class AdminNotificationViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='mark-as-read')
     def mark_as_read(self, request):
-        ids_to_mark = request.data.get('ids', [])
-        if not isinstance(ids_to_mark, list):
-            return Response({"error": "Payload must be a list of IDs, e.g., {\"ids\": [1, 5, 10]}"}, status=status.HTTP_400_BAD_REQUEST)
-        self.get_queryset().filter(id__in=ids_to_mark).update(is_read=True)
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        ids_to_mark = request.data.get('ids')
+
+        if ids_to_mark is None:
+            updated_count = self.get_queryset().filter(is_read=False).update(is_read=True)
+            return Response({'message': f'Marked all {updated_count} unread notifications as read.'})
+
+        if isinstance(ids_to_mark, list):
+            updated_count = self.get_queryset().filter(id__in=ids_to_mark).update(is_read=True)
+            return Response({'message': f'Marked {updated_count} selected notifications as read.'})
+    
+        return Response({"error": "Invalid payload."}, status=status.HTTP_400_BAD_REQUEST)
 
 class SiteContentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
