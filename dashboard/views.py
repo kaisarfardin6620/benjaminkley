@@ -10,7 +10,7 @@ from django.contrib.auth.models import User
 from django.db.models.functions import TruncMonth
 from django.db.models import Count
 from django.utils import timezone
-from django.shortcuts import get_object_or_404  
+from django.shortcuts import get_object_or_404
 from datetime import timedelta
 import calendar
 from .serializers import *
@@ -25,8 +25,8 @@ from fcm_django.models import FCMDevice
 from firebase_admin import messaging
 from django_filters.rest_framework import DjangoFilterBackend
 from scans.filters import ScanDateFilter
-from scans.pagination import ScanListPagination
-
+# Note: ScanListPagination is being replaced by CustomDashboardPagination for consistency
+from .pagination import CustomDashboardPagination
 
 class DashboardStatsAPIView(APIView):
     permission_classes = [IsAdminUser]
@@ -79,6 +79,7 @@ class UserManagementViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     serializer_class = DashboardUserSerializer
     queryset = User.objects.select_related('profile').prefetch_related('scans').order_by('-date_joined')
+    pagination_class = CustomDashboardPagination  # <-- FIX ADDED HERE
     filter_backends = [filters.SearchFilter]
     search_fields = ['first_name', 'last_name', 'email']
 
@@ -110,7 +111,7 @@ class ScanManagementViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     serializer_class = DashboardScanSerializer
     queryset = Scan.objects.select_related('user').order_by('-created_at')
-    pagination_class = ScanListPagination
+    pagination_class = CustomDashboardPagination  # <-- FIX ADDED HERE
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = ScanDateFilter
     search_fields = ['name', 'user__email', 'user__first_name', 'user__last_name']
@@ -133,10 +134,10 @@ class ContactMessageViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     serializer_class = DashboardContactMessageSerializer
     queryset = ContactMessage.objects.all().order_by('-created_at')
+    pagination_class = CustomDashboardPagination  # <-- FIX ADDED HERE
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'email', 'message']
     ordering_fields = ['created_at', 'is_replied']
-
 
 class PushNotificationHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAdminUser]
@@ -144,6 +145,7 @@ class PushNotificationHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AdminNotification.objects.filter(
         notification_type=AdminNotification.NotificationType.PUSH_SENT
     ).order_by('-created_at')
+    pagination_class = CustomDashboardPagination  # <-- FIX ADDED HERE
     filter_backends = [filters.SearchFilter]
     search_fields = ['title', 'message']
 
@@ -167,11 +169,12 @@ class SendPushNotificationAPIView(APIView):
             is_read=True
         )
         return Response({"status": f"Push notification has been sent to {all_devices.count()} devices."}, status=status.HTTP_200_OK)
-    
+
 class AdminNotificationViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     serializer_class = AdminNotificationSerializer
     queryset = AdminNotification.objects.all().order_by('-created_at')
+    pagination_class = CustomDashboardPagination  # <-- FIX ADDED HERE
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['is_read', 'notification_type']
 
