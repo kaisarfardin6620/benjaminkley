@@ -3,7 +3,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .models import Scan
 from .serializers import ScanCreateSerializer, ScanDetailSerializer
-from .tasks import process_scan_and_save
+from .utils import process_scan_and_save
+# from .processing import process_scan_and_save  # Import the new function
 from .pagination import ScanListPagination
 from django_filters.rest_framework import DjangoFilterBackend
 from .filters import ScanDateFilter
@@ -34,9 +35,10 @@ class ScanViewSet(viewsets.ModelViewSet):
         scan = serializer.instance
         
         try:
-            process_scan_and_save.delay(str(scan.id))
+            # Replace the Celery task call with a direct, synchronous call
+            process_scan_and_save(str(scan.id))
         except Exception as e:
-            print(f"Error queueing scan processing for {scan.id}: {e}")
+            print(f"Error processing scan for {scan.id}: {e}")
         
         detail_serializer = ScanDetailSerializer(scan, context={'request': request})
         

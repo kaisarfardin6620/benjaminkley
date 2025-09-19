@@ -30,7 +30,9 @@ def generate_head_model_locally(image_paths: dict, scan_id: str, gender: str) ->
     
     base_mesh = trimesh.load(str(base_model_path))
     
-    measurements = get_dynamic_2d_measurements(image_paths['front'])
+    # <-- THE FIX IS HERE: We must pass both the front and side image paths -->
+    measurements = get_dynamic_2d_measurements(image_paths['front'], image_paths['left'])
+    
     if not measurements:
         print("WARNING: No measurements obtained, using default mesh size.")
     

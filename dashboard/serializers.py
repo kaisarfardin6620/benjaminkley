@@ -66,7 +66,7 @@ class DashboardScanSerializer(serializers.ModelSerializer):
             'scan_id', 'name', 'email', 'submission_date', 'status',
             'head_width', 'head_length', 'ear_to_ear', 'eye_to_eye',
             'reconstructed_3d_head', 'image_front_url', 'image_back_url',
-            'image_left_url', 'image_right_url'
+            'image_left_url', 'image_right_url','notes', 'custom_field'
         )
 
     # --- ADDED THESE METHODS ---

@@ -19,14 +19,13 @@ from authentication.models import UserProfile, PasswordHistory
 from scans.models import Scan
 from contact_support.models import ContactMessage
 from .models import *
-from scans.tasks import process_scan_and_save
+#from scans.tasks import process_scan_and_save
 from notifications.utils import create_and_send_notification
 from .models import AdminNotification, SiteContent
 from fcm_django.models import FCMDevice
 from firebase_admin import messaging
 from django_filters.rest_framework import DjangoFilterBackend
 from scans.filters import ScanDateFilter
-# Note: ScanListPagination is being replaced by CustomDashboardPagination for consistency
 from .pagination import CustomDashboardPagination
 
 class DashboardStatsAPIView(APIView):
