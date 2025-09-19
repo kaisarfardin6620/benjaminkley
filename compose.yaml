@@ -21,8 +21,8 @@ services:
     env_file: .env
     environment:
       - PORT=8000
-      - TZ=UTC                          # <-- THE FIX: Timezone consistency
-      - MPLCONFIGDIR=/app/.cache/matplotlib # <-- THE FIX: Matplotlib cache
+      - TZ=UTC
+      - MPLCONFIGDIR=/app/.cache/matplotlib
     networks:
       - app-network
     dns:
@@ -34,38 +34,6 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
-
-  celery:
-    build: .
-    container_name: benjaminkley-celery
-    volumes:
-      - .:/app
-      - ./ai_models:/app/ai_models:ro
-      - ./media:/app/media
-    env_file: .env
-    environment:
-      - TZ=UTC                          # <-- THE FIX: Timezone consistency
-      - MPLCONFIGDIR=/app/.cache/matplotlib # <-- THE FIX: Matplotlib cache
-    networks:
-      - app-network
-    dns:
-      - 8.8.8.8
-    command: ["/app/docker-entrypoint.sh", "worker"]
-
-  celery-beat:
-    build: .
-    container_name: benjaminkley-celery-beat
-    volumes:
-      - .:/app
-    env_file: .env
-    environment:
-      - TZ=UTC                          # <-- THE FIX: Timezone consistency
-      - MPLCONFIGDIR=/app/.cache/matplotlib # <-- THE FIX: Matplotlib cache
-    networks:
-      - app-network
-    dns:
-      - 8.8.8.8
-    command: ["/app/docker-entrypoint.sh", "beat"]
 
   nginx:
     image: nginx:1.25
@@ -97,4 +65,3 @@ networks:
 
 volumes:
   staticfiles: {}
-

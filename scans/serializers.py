@@ -50,9 +50,7 @@ class ScanDetailSerializer(serializers.ModelSerializer):
         )
         
     def get_Name(self, obj):
-        if obj.user and obj.user.get_full_name():
-            return obj.user.get_full_name()
-        return "N/A"
+        return obj.name if obj.name else "N/A"
 
     def get_scan_images(self, obj):
         images = []
