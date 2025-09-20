@@ -1,8 +1,9 @@
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 from dashboard.views import PrivacyPolicyAPIView, TermsAndConditionsAPIView
+from .views import serve_obj_file
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -13,6 +14,7 @@ urlpatterns = [
     path('api/privacy-policy/', PrivacyPolicyAPIView.as_view(), name='privacy-policy'),
     path('api/terms-and-conditions/', TermsAndConditionsAPIView.as_view(), name='terms-and-conditions'),
     path('api/notifications/', include('notifications.urls')),
+    re_path(r'^media/scans/outputs/(?P<filename>[^/]+\.obj)$', serve_obj_file, name='serve-obj-file'),
 ]
 
 if settings.DEBUG:
