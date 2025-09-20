@@ -14,3 +14,4 @@ scans/outputs
 serviceAccountKey.json
 media
 .cache
+.continue

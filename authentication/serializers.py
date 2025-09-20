@@ -8,6 +8,7 @@ from rest_framework import serializers
 from .models import UserProfile, PasswordHistory, Roles
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.urls import reverse
+from fcm_django.models import FCMDevice
 
 class RoleChoiceField(serializers.ChoiceField):
     def to_internal_value(self, data):
@@ -171,6 +172,9 @@ class ResendVerificationSerializer(serializers.Serializer):
     username = serializers.CharField()
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    fcmToken = serializers.CharField(required=False, write_only=True, allow_blank=True)
+    device_type = serializers.ChoiceField(choices=[('ios', 'ios'), ('android', 'android'), ('web', 'web')], required=False, write_only=True)
+    
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
@@ -180,6 +184,8 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         username = attrs.get('username')
         password = attrs.get('password')
+        fcmToken = attrs.get('fcmToken')
+        device_type = attrs.get('device_type')
 
         try:
             user = User.objects.get(username__iexact=username)
@@ -191,6 +197,13 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         
         if not user.is_active:
              raise serializers.ValidationError('This account is not active. Please verify your email first.')
+
+        if fcmToken and device_type:
+            FCMDevice.objects.update_or_create(
+                user=user,
+                registration_id=fcmToken,
+                defaults={'type': device_type, 'active': True}
+            )
 
         data = super().validate(attrs)
 
