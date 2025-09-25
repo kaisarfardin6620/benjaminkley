@@ -1,38 +1,29 @@
 from rest_framework.renderers import JSONRenderer
-import time
+from datetime import datetime
 
 class CustomJSONRenderer(JSONRenderer):
-    """
-    A custom renderer to create a flat API response structure with a timestamp.
-
-    - For success: { "success": true, "code": 200, "message": "...", "timestamp": ..., "data": ... }
-    - For errors:  { "success": false, "code": 400, "message": "...", "timestamp": ..., "errors": ... }
-    """
     def render(self, data, accepted_media_type=None, renderer_context=None):
         response = renderer_context.get('response')
-        status_code = response.status_code
-        is_success = 200 <= status_code < 300
 
-        # Check if the view/serializer passed a special 'custom_meta' block
-        # .pop() removes it from the data so it isn't rendered twice.
-        custom_meta_data = data.pop('custom_meta', {}) if isinstance(data, dict) else {}
-        
-        # Determine the message: use the custom one if provided, otherwise use defaults.
-        message = custom_meta_data.get('message', 'Success' if is_success else data.get('detail', 'An error occurred.'))
+        if isinstance(data, dict) and 'success' in data:
+            return super().render(data, accepted_media_type, renderer_context)
 
-        # Start building the final response dictionary with the flat keys
-        custom_response = {
-            'success': is_success,
-            'code': status_code,
+        message = 'Request was successful.'
+
+        if (isinstance(data, dict) and
+                'custom_meta' in data and
+                isinstance(data.get('custom_meta'), dict) and
+                'message' in data.get('custom_meta')):
+            
+            message = data['custom_meta']['message']
+            del data['custom_meta']
+
+        response_data = {
+            'success': True,
+            'code': response.status_code if response else 200,
             'message': message,
-            'timestamp': int(time.time())
+            'timestamp': int(datetime.now().timestamp()),
+            'data': data
         }
 
-        # Add either a 'data' or 'errors' key based on success or failure
-        if is_success:
-            custom_response['data'] = data
-        else:
-            custom_response['errors'] = data
-
-        # Let the parent renderer handle the final conversion to a JSON string
-        return super().render(custom_response, accepted_media_type, renderer_context)
+        return super().render(response_data, accepted_media_type, renderer_context)
