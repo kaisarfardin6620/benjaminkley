@@ -5,8 +5,7 @@ from scans.models import Scan
 from contact_support.models import ContactMessage
 from .models import AdminNotification, SiteContent
 from authentication.serializers import PasswordValidator
-from django.conf import settings # <-- ADDED THIS IMPORT
-
+from django.conf import settings 
 
 class DashboardUserSerializer(serializers.ModelSerializer):
     role = serializers.CharField(source='profile.role', read_only=True)
@@ -14,7 +13,7 @@ class DashboardUserSerializer(serializers.ModelSerializer):
     date_of_birth = serializers.DateField(source='profile.date_of_birth', read_only=True)
     number_of_scan = serializers.SerializerMethodField()
     
-    profile_picture = serializers.SerializerMethodField() # <-- THIS IS THE FIX
+    profile_picture = serializers.SerializerMethodField() 
     
     class Meta:
         model = User
@@ -23,7 +22,6 @@ class DashboardUserSerializer(serializers.ModelSerializer):
             'role', 'date_of_birth', 'number_of_scan', 'status', 'date_joined'
         )
 
-    # ADDED THIS METHOD
     def get_profile_picture(self, obj):
         if obj.profile.profile_picture:
             return f"{settings.SERVER_BASE_URL}{obj.profile.profile_picture.url}"
@@ -48,28 +46,41 @@ class DashboardScanSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source='user.email', read_only=True)
     submission_date = serializers.DateTimeField(source='created_at', read_only=True)
     
-    # --- THESE ARE THE FIXES ---
     reconstructed_3d_head = serializers.SerializerMethodField()
     image_front_url = serializers.SerializerMethodField()
     image_back_url = serializers.SerializerMethodField()
     image_left_url = serializers.SerializerMethodField()
     image_right_url = serializers.SerializerMethodField()
-    
     head_width = serializers.CharField()
+    head_height = serializers.CharField() 
     head_length = serializers.CharField()
     ear_to_ear = serializers.CharField()
     eye_to_eye = serializers.CharField()
-    
+    head_circumference_A = serializers.CharField() 
+    forehead_to_back_B = serializers.CharField() 
+    cross_measurement_C = serializers.CharField()
+    under_chin_D = serializers.CharField()
+    eyebrow_to_earlobe_E = serializers.CharField()
+    eye_corner_to_ear_F = serializers.CharField()
+    ear_height_G = serializers.CharField()
+    ear_width_H = serializers.CharField()
+    cheek_guard_clearance_L = serializers.CharField()
+    cheek_guard_height_M = serializers.CharField()
+    cheek_guard_width_N = serializers.CharField()
+
     class Meta:
         model = Scan
         fields = (
-            'scan_id', 'name', 'email', 'submission_date', 'status',
-            'head_width', 'head_length', 'ear_to_ear', 'eye_to_eye',
+            'scan_id', 'name', 'email', 'submission_date', 'status', 'notes', 'custom_field',
             'reconstructed_3d_head', 'image_front_url', 'image_back_url',
-            'image_left_url', 'image_right_url','notes', 'custom_field'
+            'image_left_url', 'image_right_url',
+            'head_width', 'head_height', 'head_length', 'ear_to_ear', 'eye_to_eye',
+            'head_circumference_A', 'forehead_to_back_B', 'cross_measurement_C',
+            'under_chin_D', 'eyebrow_to_earlobe_E', 'eye_corner_to_ear_F',
+            'ear_height_G', 'ear_width_H', 'cheek_guard_clearance_L',
+            'cheek_guard_height_M', 'cheek_guard_width_N'
         )
 
-    # --- ADDED THESE METHODS ---
     def get_reconstructed_3d_head(self, obj):
         if obj.processed_3d_model:
             return f"{settings.SERVER_BASE_URL}{obj.processed_3d_model.url}"
@@ -94,7 +105,6 @@ class DashboardScanSerializer(serializers.ModelSerializer):
         if obj.image_right:
             return f"{settings.SERVER_BASE_URL}{obj.image_right.url}"
         return None
-
 
 class DashboardContactMessageSerializer(serializers.ModelSerializer):
     class Meta:

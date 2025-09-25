@@ -9,6 +9,8 @@ from .models import UserProfile, PasswordHistory, Roles
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.urls import reverse
 from fcm_django.models import FCMDevice
+from django.contrib.auth import authenticate
+from rest_framework_simplejwt.tokens import RefreshToken
 
 class RoleChoiceField(serializers.ChoiceField):
     def to_internal_value(self, data):
@@ -169,35 +171,51 @@ class ProfilePictureSerializer(serializers.ModelSerializer):
         return instance
 
 class ResendVerificationSerializer(serializers.Serializer):
-    username = serializers.CharField()
+    email = serializers.CharField()
 
-class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+class MyTokenObtainPairSerializer(serializers.Serializer):
+    """
+    A simple, direct serializer for logging in with email and password.
+    It does NOT inherit from the complex simple-jwt base classes, which was the source of the bug.
+    """
+    # Define EXACTLY the fields you want the user to provide.
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
     fcmToken = serializers.CharField(required=False, write_only=True, allow_blank=True)
     device_type = serializers.ChoiceField(choices=[('ios', 'ios'), ('android', 'android'), ('web', 'web')], required=False, write_only=True)
     
-    @classmethod
-    def get_token(cls, user):
-        token = super().get_token(user)
-        token['username'] = user.username
-        return token
+    # This key is necessary for Django Rest Framework
+    class Meta:
+        fields = ['email', 'password', 'fcmToken', 'device_type']
 
     def validate(self, attrs):
-        username = attrs.get('username')
+        email = attrs.get('email')
         password = attrs.get('password')
+
+        if not email or not password:
+            raise serializers.ValidationError('Email and password are required.')
+
+        # Find the user by case-insensitive email to get their actual username
+        try:
+            user_obj = User.objects.get(email__iexact=email)
+        except User.DoesNotExist:
+            raise serializers.ValidationError('You have entered a wrong email or password.')
+
+        # Use Django's standard authentication system with the correct username
+        user = authenticate(username=user_obj.username, password=password)
+
+        if user is None:
+            raise serializers.ValidationError('You have entered a wrong email or password.')
+
+        if not user.is_active:
+            raise serializers.ValidationError('This account is not active. Please verify your email first.')
+
+        # If authentication is successful, manually create the tokens
+        refresh = RefreshToken.for_user(user)
+
+        # Handle the optional FCM token logic
         fcmToken = attrs.get('fcmToken')
         device_type = attrs.get('device_type')
-
-        try:
-            user = User.objects.get(username__iexact=username)
-        except User.DoesNotExist:
-            raise serializers.ValidationError('You have entered a wrong username.')
-
-        if not user.check_password(password):
-            raise serializers.ValidationError('You have entered a wrong password.')
-        
-        if not user.is_active:
-             raise serializers.ValidationError('This account is not active. Please verify your email first.')
-
         if fcmToken and device_type:
             FCMDevice.objects.update_or_create(
                 user=user,
@@ -205,22 +223,19 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
                 defaults={'type': device_type, 'active': True}
             )
 
-        data = super().validate(attrs)
-
-        structured_response = {
+        # Return the final, structured data that the view will send as a response.
+        return {
             'custom_meta': {
                 "message": "Successfully Logged in."
             },
             "user": {
                 "id": user.pk,
                 "email": user.email,
-                "role": "ADMIN" if user.is_staff else user.profile.role
+                "role": "ADMIN" if user.is_staff else user.profile.role 
             },
-            "token": data['access'],
-            "refresh_token": data['refresh']
+            "token": str(refresh.access_token),
+            "refresh_token": str(refresh)
         }
-        
-        return structured_response
 
 class LogoutSerializer(serializers.Serializer):
     refresh = serializers.CharField()

@@ -101,17 +101,24 @@ class ResendSignupOTPView(APIView):
                 return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-class MyTokenObtainPairView(TokenObtainPairView):
+class MyTokenObtainPairView(APIView):
+    """
+    A simple, direct view for handling token generation.
+    It uses our new custom serializer and returns its data upon success.
+    """
+    permission_classes = [AllowAny]
     serializer_class = MyTokenObtainPairSerializer
+
     def post(self, request, *args, **kwargs):
-        username = request.data.get('username')
-        try:
-            user = User.objects.get(username__iexact=username) # Case-insensitive check
-            if not user.is_active:
-                return Response({'error': 'Account not active. Please verify your account first.'}, status=status.HTTP_403_FORBIDDEN)
-        except User.DoesNotExist:
-            pass
-        return super().post(request, *args, **kwargs)
+        serializer = self.serializer_class(data=request.data)
+        
+        # The `validate` method in the serializer will run. If it fails,
+        # an exception is raised which DRF handles by sending a 400 error.
+        serializer.is_valid(raise_exception=True)
+        
+        # If validation succeeds, the `validated_data` is the complete
+        # JSON response we built in the serializer.
+        return Response(serializer.validated_data, status=status.HTTP_200_OK)
         
 class UserLogoutAPIView(APIView):
     permission_classes = [IsAuthenticated]
