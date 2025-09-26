@@ -1,13 +1,19 @@
+# In scans/pdf_generator.py
+
 import io
 from .models import Scan
 from django.conf import settings
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.units import inch
 from reportlab.lib import colors
 
 def generate_scan_pdf(scan_object: Scan):
+    """
+    Generates a PDF report for a given Scan object, including the Scan ID,
+    but without the thumbnail image.
+    """
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, rightMargin=0.75*inch, leftMargin=0.75*inch, topMargin=0.75*inch, bottomMargin=0.75*inch)
     
@@ -35,16 +41,6 @@ def generate_scan_pdf(scan_object: Scan):
     elements.append(info_table)
     elements.append(Spacer(1, 0.3*inch))
     
-    if scan_object.image_front:
-        try:
-            image_path = scan_object.image_front.path
-            
-            img = Image(image_path, width=3*inch, height=3*inch)
-            elements.append(img)
-            elements.append(Spacer(1, 0.3*inch))
-        except Exception as e:
-            print(f"Error adding image to PDF: {e}")
-
     elements.append(Paragraph("Key Measurements", styles['h2']))
     
     def format_val(value):
