@@ -58,6 +58,12 @@ class ScanViewSet(viewsets.ModelViewSet):
         except Scan.DoesNotExist:
             return Response({"error": "Scan not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        # DEBUG: Check if the image field has a file attached
+        if scan.image_front:
+            print(f"DEBUG: image_front exists. File size: {scan.image_front.size} bytes.")
+        else:
+            print("DEBUG: image_front does not exist or is not attached to the scan object.")
+
         pdf_buffer = generate_scan_pdf(scan)
 
         return FileResponse(
