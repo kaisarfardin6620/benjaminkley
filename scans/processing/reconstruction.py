@@ -3,38 +3,50 @@ from pathlib import Path
 import trimesh
 import tempfile
 import os
-import numpy as np
-from .measurement import get_dynamic_2d_measurements
 
 def reshape_model_to_match_measurements(base_mesh, measurements):
-    print("--- Reshaping 3D model based on measurements ---")
+    print("--- Reshaping 3D model based on real measurements ---")
     
     bounds = base_mesh.bounds
-    current_width = bounds[1][0] - bounds[0][0]  
-    current_length = bounds[1][2] - bounds[0][2]  
+    center = base_mesh.center_mass
+    
+    base_mesh.apply_translation(-center)
+    
+    bounds = base_mesh.bounds
+    current_width = bounds[1][0] - bounds[0][0] 
+    current_height = bounds[1][1] - bounds[0][1] 
+    current_length = bounds[1][2] - bounds[0][2]
 
     target_width = measurements.get('head_width', 15.0)  
-    target_length = measurements.get('head_length', 20.0)  
+    target_height = measurements.get('head_height', 22.0)
+    target_length = measurements.get('head_length', 20.0)
 
     scale_x = target_width / current_width if current_width > 0 else 1.0
+    scale_y = target_height / current_height if current_height > 0 else 1.0
     scale_z = target_length / current_length if current_length > 0 else 1.0
-    scale_y = (scale_x + scale_z) / 2  
+    
+    print(f"Applying scaling factors: X={scale_x:.2f}, Y={scale_y:.2f}, Z={scale_z:.2f}")
 
     base_mesh.apply_scale((scale_x, scale_y, scale_z))
     
+    base_mesh.apply_translation(center)
+    
     return base_mesh
 
-def generate_head_model_locally(image_paths: dict, scan_id: str, gender: str) -> tuple[str, str]:
+def generate_head_model_locally(scan_id: str, gender: str, measurements: dict) -> tuple[str, str]:
+
     base_heads_dir = Path(settings.AI_MODELS_DIR) / 'base_heads'
     base_model_path = base_heads_dir / ('female_head.obj' if gender == 'Female' else 'male_head.obj')
     
-    base_mesh = trimesh.load(str(base_model_path))
-    
-    # <-- THE FIX IS HERE: We must pass both the front and side image paths -->
-    measurements = get_dynamic_2d_measurements(image_paths['front'], image_paths['left'])
-    
+    try:
+        base_mesh = trimesh.load(str(base_model_path), force='mesh')
+    except Exception as e:
+        print(f"Error loading base mesh: {e}")
+        return None, None
+
     if not measurements:
-        print("WARNING: No measurements obtained, using default mesh size.")
+        print("WARNING: No measurements provided to shape the model.")
+        return None, None
     
     newly_shaped_mesh = reshape_model_to_match_measurements(base_mesh, measurements)
     

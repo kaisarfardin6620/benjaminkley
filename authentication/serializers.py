@@ -122,7 +122,7 @@ class ProfileSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(source='user.first_name')
     last_name = serializers.CharField(source='user.last_name')
     email = serializers.EmailField(source='user.email', read_only=True)
-    profile_picture = serializers.SerializerMethodField() # <-- THIS IS THE FIX
+    profile_picture = serializers.SerializerMethodField()
 
     class Meta:
         model = UserProfile
@@ -131,10 +131,11 @@ class ProfileSerializer(serializers.ModelSerializer):
             'clinic_name', 'date_of_birth', 'contact_number', 'address', 'status'
         ]
 
-    # ADDED THIS METHOD
     def get_profile_picture(self, obj):
-        if obj.profile_picture:
-            return f"{settings.SERVER_BASE_URL}{obj.profile_picture.url}"
+        request = self.context.get('request')
+        # This will now correctly build the full URL for either local or S3 storage
+        if obj.profile_picture and request:
+            return request.build_absolute_uri(obj.profile_picture.url)
         return None
 
 class UpdateProfileSerializer(serializers.Serializer):

@@ -53,19 +53,23 @@ class ScanDetailSerializer(serializers.ModelSerializer):
         return obj.name if obj.name else "N/A"
 
     def get_scan_images(self, obj):
+        request = self.context.get('request')
+        if not request:
+            return {"thumbnail": None, "all_images": []}
+
         images = []
         thumbnail = None
 
         if obj.image_front and hasattr(obj.image_front, 'url'):
-            url = f"{settings.SERVER_BASE_URL}{obj.image_front.url}"
+            url = request.build_absolute_uri(obj.image_front.url)
             images.append(url)
             thumbnail = url
         if obj.image_back and hasattr(obj.image_back, 'url'):
-            images.append(f"{settings.SERVER_BASE_URL}{obj.image_back.url}")
+            images.append(request.build_absolute_uri(obj.image_back.url))
         if obj.image_left and hasattr(obj.image_left, 'url'):
-            images.append(f"{settings.SERVER_BASE_URL}{obj.image_left.url}")
+            images.append(request.build_absolute_uri(obj.image_left.url))
         if obj.image_right and hasattr(obj.image_right, 'url'):
-            images.append(f"{settings.SERVER_BASE_URL}{obj.image_right.url}")
+            images.append(request.build_absolute_uri(obj.image_right.url))
         
         return {
             "thumbnail": thumbnail,
@@ -73,6 +77,7 @@ class ScanDetailSerializer(serializers.ModelSerializer):
         }
 
     def get_reconstructed_3d_head(self, obj):
-        if obj.processed_3d_model and hasattr(obj.processed_3d_model, 'url'):
-            return f"{settings.SERVER_BASE_URL}{obj.processed_3d_model.url}"
+        request = self.context.get('request')
+        if obj.processed_3d_model and hasattr(obj.processed_3d_model, 'url') and request:
+            return request.build_absolute_uri(obj.processed_3d_model.url)
         return None
