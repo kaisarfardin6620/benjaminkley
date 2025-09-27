@@ -133,7 +133,6 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     def get_profile_picture(self, obj):
         request = self.context.get('request')
-        # This will now correctly build the full URL for either local or S3 storage
         if obj.profile_picture and request:
             return request.build_absolute_uri(obj.profile_picture.url)
         return None
@@ -175,17 +174,11 @@ class ResendVerificationSerializer(serializers.Serializer):
     email = serializers.CharField()
 
 class MyTokenObtainPairSerializer(serializers.Serializer):
-    """
-    A simple, direct serializer for logging in with email and password.
-    It does NOT inherit from the complex simple-jwt base classes, which was the source of the bug.
-    """
-    # Define EXACTLY the fields you want the user to provide.
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
     fcmToken = serializers.CharField(required=False, write_only=True, allow_blank=True)
     device_type = serializers.ChoiceField(choices=[('ios', 'ios'), ('android', 'android'), ('web', 'web')], required=False, write_only=True)
     
-    # This key is necessary for Django Rest Framework
     class Meta:
         fields = ['email', 'password', 'fcmToken', 'device_type']
 
@@ -196,13 +189,11 @@ class MyTokenObtainPairSerializer(serializers.Serializer):
         if not email or not password:
             raise serializers.ValidationError('Email and password are required.')
 
-        # Find the user by case-insensitive email to get their actual username
         try:
             user_obj = User.objects.get(email__iexact=email)
         except User.DoesNotExist:
-            raise serializers.ValidationError('You have entered a wrong email or password.')
+            raise serializers.ValidationError('No account found with this email address.')
 
-        # Use Django's standard authentication system with the correct username
         user = authenticate(username=user_obj.username, password=password)
 
         if user is None:
@@ -211,10 +202,8 @@ class MyTokenObtainPairSerializer(serializers.Serializer):
         if not user.is_active:
             raise serializers.ValidationError('This account is not active. Please verify your email first.')
 
-        # If authentication is successful, manually create the tokens
         refresh = RefreshToken.for_user(user)
 
-        # Handle the optional FCM token logic
         fcmToken = attrs.get('fcmToken')
         device_type = attrs.get('device_type')
         if fcmToken and device_type:
@@ -224,7 +213,6 @@ class MyTokenObtainPairSerializer(serializers.Serializer):
                 defaults={'type': device_type, 'active': True}
             )
 
-        # Return the final, structured data that the view will send as a response.
         return {
             'custom_meta': {
                 "message": "Successfully Logged in."
