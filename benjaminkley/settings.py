@@ -1,3 +1,5 @@
+# benjaminkley/settings.py
+
 from pathlib import Path
 from datetime import timedelta
 import os
@@ -12,7 +14,6 @@ AWS_S3_ADDRESSING_STYLE = "virtual"
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv('SECRET_KEY')
-#DEBUG = True
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 ROOT_URLCONF = 'benjaminkley.urls'
 
@@ -73,6 +74,12 @@ AI_MODELS_DIR = BASE_DIR / 'ai_models'
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+# --- THIS IS THE FIX ---
+# Define the local storage defaults *before* the conditional S3 block.
+# This ensures MEDIA_ROOT is always set, preventing the permission error.
+MEDIA_URL = '/media/'
+MEDIA_ROOT = '/app/media'
+
 
 if USE_S3_STORAGE:
     # --- S3 Storage Configuration ---
@@ -84,18 +91,12 @@ if USE_S3_STORAGE:
     AWS_S3_ADDRESSING_STYLE = "virtual"
 
     # --- Configuration for Private Buckets (generates temporary, secure URLs) ---
-    #AWS_DEFAULT_ACL = 'private'
     AWS_S3_SIGNATURE_VERSION = 's3v4'
     AWS_QUERYSTRING_AUTH = True  # Generates presigned URLs
     AWS_QUERYSTRING_EXPIRE = 3600  # URL valid for 1 hour (in seconds)
 
-    # When using S3, MEDIA_ROOT is not needed and MEDIA_URL is handled by the storage backend
+    # Overwrite MEDIA_URL with the S3 path when S3 is active
     MEDIA_URL = f'https://{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com/'
-
-else:
-    # --- Local Storage Configuration ---
-    MEDIA_URL = '/media/'
-    MEDIA_ROOT = '/app/media'
 
 # --- TEMPLATES & REST OF DJANGO SETTINGS ---
 TEMPLATES = [
