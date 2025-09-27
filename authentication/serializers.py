@@ -132,9 +132,10 @@ class ProfileSerializer(serializers.ModelSerializer):
         ]
 
     def get_profile_picture(self, obj):
-        request = self.context.get('request')
-        if obj.profile_picture and request:
-            return request.build_absolute_uri(obj.profile_picture.url)
+        if obj.profile_picture and hasattr(obj.profile_picture, 'url'):
+            if settings.USE_S3_STORAGE:
+                return obj.profile_picture.url
+            return f"{settings.SERVER_BASE_URL}{obj.profile_picture.url}"
         return None
 
 class UpdateProfileSerializer(serializers.Serializer):

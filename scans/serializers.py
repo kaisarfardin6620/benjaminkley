@@ -53,23 +53,32 @@ class ScanDetailSerializer(serializers.ModelSerializer):
         return obj.name if obj.name else "N/A"
 
     def get_scan_images(self, obj):
-        request = self.context.get('request')
-        if not request:
-            return {"thumbnail": None, "all_images": []}
-
         images = []
         thumbnail = None
 
-        if obj.image_front and hasattr(obj.image_front, 'url'):
-            url = request.build_absolute_uri(obj.image_front.url)
-            images.append(url)
-            thumbnail = url
-        if obj.image_back and hasattr(obj.image_back, 'url'):
-            images.append(request.build_absolute_uri(obj.image_back.url))
-        if obj.image_left and hasattr(obj.image_left, 'url'):
-            images.append(request.build_absolute_uri(obj.image_left.url))
-        if obj.image_right and hasattr(obj.image_right, 'url'):
-            images.append(request.build_absolute_uri(obj.image_right.url))
+        def get_full_url(image_field):
+            if image_field and hasattr(image_field, 'url'):
+                if settings.USE_S3_STORAGE:
+                    return image_field.url
+                return f"{settings.SERVER_BASE_URL}{image_field.url}"
+            return None
+
+        front_url = get_full_url(obj.image_front)
+        if front_url:
+            thumbnail = front_url
+            images.append(front_url)
+        
+        back_url = get_full_url(obj.image_back)
+        if back_url:
+            images.append(back_url)
+            
+        left_url = get_full_url(obj.image_left)
+        if left_url:
+            images.append(left_url)
+
+        right_url = get_full_url(obj.image_right)
+        if right_url:
+            images.append(right_url)
         
         return {
             "thumbnail": thumbnail,
@@ -77,7 +86,8 @@ class ScanDetailSerializer(serializers.ModelSerializer):
         }
 
     def get_reconstructed_3d_head(self, obj):
-        request = self.context.get('request')
-        if obj.processed_3d_model and hasattr(obj.processed_3d_model, 'url') and request:
-            return request.build_absolute_uri(obj.processed_3d_model.url)
+        if obj.processed_3d_model and hasattr(obj.processed_3d_model, 'url'):
+            if settings.USE_S3_STORAGE:
+                return obj.processed_3d_model.url
+            return f"{settings.SERVER_BASE_URL}{obj.processed_3d_model.url}"
         return None

@@ -1,5 +1,3 @@
-# dashboard/serializers.py
-
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from authentication.models import UserProfile
@@ -25,9 +23,10 @@ class DashboardUserSerializer(serializers.ModelSerializer):
         )
 
     def get_profile_picture(self, obj):
-        request = self.context.get('request')
-        if obj.profile.profile_picture and request:
-            return request.build_absolute_uri(obj.profile.profile_picture.url)
+        if obj.profile.profile_picture and hasattr(obj.profile.profile_picture, 'url'):
+            if settings.USE_S3_STORAGE:
+                return obj.profile.profile_picture.url
+            return f"{settings.SERVER_BASE_URL}{obj.profile.profile_picture.url}"
         return None
     
     def get_number_of_scan(self, obj):
@@ -85,33 +84,38 @@ class DashboardScanSerializer(serializers.ModelSerializer):
         )
 
     def get_reconstructed_3d_head(self, obj):
-        request = self.context.get('request')
-        if obj.processed_3d_model and request:
-            return request.build_absolute_uri(obj.processed_3d_model.url)
+        if obj.processed_3d_model and hasattr(obj.processed_3d_model, 'url'):
+            if settings.USE_S3_STORAGE:
+                return obj.processed_3d_model.url
+            return f"{settings.SERVER_BASE_URL}{obj.processed_3d_model.url}"
         return None
 
     def get_image_front_url(self, obj):
-        request = self.context.get('request')
-        if obj.image_front and request:
-            return request.build_absolute_uri(obj.image_front.url)
+        if obj.image_front and hasattr(obj.image_front, 'url'):
+            if settings.USE_S3_STORAGE:
+                return obj.image_front.url
+            return f"{settings.SERVER_BASE_URL}{obj.image_front.url}"
         return None
 
     def get_image_back_url(self, obj):
-        request = self.context.get('request')
-        if obj.image_back and request:
-            return request.build_absolute_uri(obj.image_back.url)
+        if obj.image_back and hasattr(obj.image_back, 'url'):
+            if settings.USE_S3_STORAGE:
+                return obj.image_back.url
+            return f"{settings.SERVER_BASE_URL}{obj.image_back.url}"
         return None
 
     def get_image_left_url(self, obj):
-        request = self.context.get('request')
-        if obj.image_left and request:
-            return request.build_absolute_uri(obj.image_left.url)
+        if obj.image_left and hasattr(obj.image_left, 'url'):
+            if settings.USE_S3_STORAGE:
+                return obj.image_left.url
+            return f"{settings.SERVER_BASE_URL}{obj.image_left.url}"
         return None
 
     def get_image_right_url(self, obj):
-        request = self.context.get('request')
-        if obj.image_right and request:
-            return request.build_absolute_uri(obj.image_right.url)
+        if obj.image_right and hasattr(obj.image_right, 'url'):
+            if settings.USE_S3_STORAGE:
+                return obj.image_right.url
+            return f"{settings.SERVER_BASE_URL}{obj.image_right.url}"
         return None
 
 class DashboardContactMessageSerializer(serializers.ModelSerializer):
@@ -145,9 +149,10 @@ class AdminProfileSerializer(serializers.ModelSerializer):
         fields = ('full_name', 'email', 'contact_number', 'profile_picture')
 
     def get_profile_picture(self, obj):
-        request = self.context.get('request')
-        if obj.profile.profile_picture and request:
-            return request.build_absolute_uri(obj.profile.profile_picture.url)
+        if obj.profile.profile_picture and hasattr(obj.profile.profile_picture, 'url'):
+            if settings.USE_S3_STORAGE:
+                return obj.profile.profile_picture.url
+            return f"{settings.SERVER_BASE_URL}{obj.profile.profile_picture.url}"
         return None
 
 
