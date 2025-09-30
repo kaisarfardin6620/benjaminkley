@@ -1,5 +1,6 @@
 from fcm_django.models import FCMDevice
 from .models import Notification
+from firebase_admin import messaging 
 
 def create_and_send_notification(user, title, message):
     Notification.objects.create(
@@ -12,10 +13,11 @@ def create_and_send_notification(user, title, message):
         devices = FCMDevice.objects.filter(user=user, active=True)
         if devices.exists():
             devices.send_message(
-                title=title,
-                body=message
+                messaging.Message(
+                    notification=messaging.Notification(title=title, body=message)
+                )
             )
-            print(f"Successfully sent push notification to {devices.count()} devices for user {user.username}.")
+            print(f"Successfully sent PUSH NOTIFICATION to {devices.count()} devices for user {user.username}.")
         else:
             print(f"No active devices found for user {user.username}. Push notification not sent.")
     except Exception as e:

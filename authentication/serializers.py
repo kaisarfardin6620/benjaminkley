@@ -209,9 +209,12 @@ class MyTokenObtainPairSerializer(serializers.Serializer):
         device_type = attrs.get('device_type')
         if fcmToken and device_type:
             FCMDevice.objects.update_or_create(
-                user=user,
                 registration_id=fcmToken,
-                defaults={'type': device_type, 'active': True}
+                defaults={
+                    'user': user,
+                    'type': device_type,
+                    'active': True
+                }
             )
 
         return {
