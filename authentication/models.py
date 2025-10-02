@@ -21,10 +21,17 @@ class UserProfile(models.Model):
     clinic_name = models.CharField(max_length=255)
     date_of_birth = models.DateField()
     contact_number = PhoneNumberField(region=None, blank=True, null=True)
-    status = models.CharField(max_length=50, default='Pending')
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        ACTIVE = 'ACTIVE', 'Active'
+        SUSPENDED = 'SUSPENDED', 'Suspended'
+
+    status = models.CharField(max_length=50, choices=Status.choices, default=Status.PENDING)
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     address = models.CharField(max_length=255)
+    has_accepted_terms = models.BooleanField(default=False)
 
     def __repr__(self):
         return f"<User object: {self.user.first_name} {self.user.last_name}>"

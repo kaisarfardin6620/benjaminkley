@@ -18,6 +18,7 @@ class RoleChoiceField(serializers.ChoiceField):
             if value == data:
                 return key
         self.fail('invalid_choice', input=data)
+
 class PasswordValidator:
     @staticmethod
     def validate_breached_password(password):
@@ -54,38 +55,36 @@ class SignupSerializer(serializers.Serializer):
     date_of_birth = serializers.DateField(required=True, input_formats=['%m-%d-%Y'])
     contact_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     address = serializers.CharField(max_length=255, required=True)
+    terms_accepted = serializers.BooleanField(write_only=True)
 
     def validate(self, data):
         if data['password'] != data['confirm_password']:
             raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
         if User.objects.filter(email__iexact=data['email']).exists():
-            raise serializers.ValidationError({"email": "This email is already in use by another account."})
+            raise serializers.ValidationError({"email": "An account with this email already exists."})
+        if not data.get('terms_accepted'):
+            raise serializers.ValidationError({"terms_accepted": "You must agree to the terms and conditions to register."})
         data.pop('confirm_password', None)
         return data
 
     def create(self, validated_data):
+        validated_data.pop('terms_accepted', None)
         user = User.objects.create_user(
             username=validated_data['email'],
             email=validated_data['email'],
             password=validated_data['password'],
             first_name=validated_data.get('first_name'),
             last_name=validated_data.get('last_name'),
-            is_active=True
+            is_active=False
         )
-
         profile = user.profile
-        
         profile.role = validated_data.get('role', profile.role)
         profile.clinic_name = validated_data.get('clinic_name', profile.clinic_name)
         profile.date_of_birth = validated_data.get('date_of_birth', profile.date_of_birth)
         profile.contact_number = validated_data.get('contact_number', profile.contact_number)
         profile.address = validated_data.get('address', profile.address)
         profile.profile_picture = validated_data.get('profile_picture', profile.profile_picture)
-        
-        profile.status = 'Active'
-        
         profile.save()
-
         return user
 
 class OTPVerificationSerializer(serializers.Serializer):
@@ -156,10 +155,8 @@ class UpdateProfileSerializer(serializers.Serializer):
         profile.clinic_name = validated_data.get('clinic_name', profile.clinic_name)
         profile.date_of_birth = validated_data.get('date_of_birth', profile.date_of_birth)
         profile.address = validated_data.get('address', profile.address)
-
         instance.save()  
         profile.save()   
-        
         return instance
 
 class ProfilePictureSerializer(serializers.ModelSerializer):
@@ -200,8 +197,11 @@ class MyTokenObtainPairSerializer(serializers.Serializer):
         if user is None:
             raise serializers.ValidationError('You have entered a wrong email or password.')
 
+        if not user.is_active and user.profile.status == 'PENDING':
+             raise serializers.ValidationError('Your account is awaiting admin approval.')
+
         if not user.is_active:
-            raise serializers.ValidationError('This account is not active. Please verify your email first.')
+            raise serializers.ValidationError('This account is suspended or inactive.')
 
         refresh = RefreshToken.for_user(user)
 
@@ -224,7 +224,8 @@ class MyTokenObtainPairSerializer(serializers.Serializer):
             "user": {
                 "id": user.pk,
                 "email": user.email,
-                "role": "ADMIN" if user.is_staff else user.profile.role 
+                "role": "ADMIN" if user.is_staff else user.profile.role,
+                "has_accepted_terms": user.profile.has_accepted_terms
             },
             "token": str(refresh.access_token),
             "refresh_token": str(refresh)
@@ -251,7 +252,6 @@ class SetNewPasswordSerializer(serializers.Serializer):
             raise serializers.ValidationError({
                 "new_password": "This password is too common and has been seen before. Please choose a more unique password."
             })
-            
         return data
     
 class DeleteAccountSerializer(serializers.Serializer):

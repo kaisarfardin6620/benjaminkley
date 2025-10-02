@@ -43,26 +43,30 @@ class UserSignupAPIView(APIView):
     
     def post(self, request):
         serializer = SignupSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
-            otp = generate_otp()
-            AuthToken.objects.create(user=user, otp_code=otp, token_type='signup')
-            send_otp_email(user, otp, purpose="email verification") 
-            
-            AdminNotification.objects.create(
-                notification_type=AdminNotification.NotificationType.NEW_USER,
-                message=f"New user signed up and is now active: {user.get_full_name()} ({user.email})."
-            )
+        if not serializer.is_valid():
+            first_error = next(iter(serializer.errors.values()))[0]
+            message = first_error if "This field" not in first_error else "Please fill in all required fields before signing up."
+            return Response({"message": message, "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
-            create_and_send_notification(
-                user=user,
-                title="Welcome to Our App!",
-                message=f"Hi {user.first_name}, thank you for joining. Your account is now active."
-            )
-
-            return Response({"message": "User registered successfully. An OTP has been sent to verify your email."}, status=status.HTTP_201_CREATED)
+        user = serializer.save()
         
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        AdminNotification.objects.create(
+            notification_type=AdminNotification.NotificationType.NEW_USER,
+            message=f"New user requires approval: {user.get_full_name()} ({user.email})."
+        )
+
+        return Response({
+            "message": "Congratulations, you successfully signed up. You will receive an email notification as soon as your account is approved."
+        }, status=status.HTTP_201_CREATED)
+
+class AcceptTermsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        profile = request.user.profile
+        profile.has_accepted_terms = True
+        profile.save()
+        return Response({"message": "Terms and conditions accepted successfully."}, status=status.HTTP_200_OK)
 
 class VerifySignupOTPView(APIView):
     permission_classes = [AllowAny]
@@ -89,7 +93,7 @@ class ResendSignupOTPView(APIView):
         if serializer.is_valid():
             username = serializer.validated_data['username']
             try:
-                user = User.objects.get(username__iexact=username) # Case-insensitive check
+                user = User.objects.get(username__iexact=username)
                 if user.is_active:
                     return Response({'error': 'Account is already active.'}, status=status.HTTP_400_BAD_REQUEST)
                 AuthToken.objects.filter(user=user, token_type='signup', is_used=False).update(is_used=True)
@@ -102,22 +106,12 @@ class ResendSignupOTPView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 class MyTokenObtainPairView(APIView):
-    """
-    A simple, direct view for handling token generation.
-    It uses our new custom serializer and returns its data upon success.
-    """
     permission_classes = [AllowAny]
     serializer_class = MyTokenObtainPairSerializer
 
     def post(self, request, *args, **kwargs):
         serializer = self.serializer_class(data=request.data)
-        
-        # The `validate` method in the serializer will run. If it fails,
-        # an exception is raised which DRF handles by sending a 400 error.
         serializer.is_valid(raise_exception=True)
-        
-        # If validation succeeds, the `validated_data` is the complete
-        # JSON response we built in the serializer.
         return Response(serializer.validated_data, status=status.HTTP_200_OK)
         
 class UserLogoutAPIView(APIView):
@@ -155,9 +149,7 @@ class UpdateProfileAPIView(APIView):
         )
         if serializer.is_valid():
             serializer.save()
-
             profile.refresh_from_db()
-
             create_and_send_notification(
                 user=user,
                 title="Profile Updated",
@@ -165,8 +157,6 @@ class UpdateProfileAPIView(APIView):
             )
             return Response(ProfileSerializer(profile, context={'request': request}).data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
     
 class ChangePasswordAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -178,13 +168,11 @@ class ChangePasswordAPIView(APIView):
             user.set_password(new_password)
             user.save()
             PasswordHistory.objects.create(user=user, hashed_password=user.password)
-
             create_and_send_notification(
                 user=user,
                 title="Security Alert: Password Changed",
                 message="Your account password was successfully changed. If you did not make this change, please contact support immediately."
             )
-
             return Response({'message': 'Password changed successfully.'}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -195,7 +183,7 @@ class PasswordResetRequestOTPView(APIView):
         if serializer.is_valid():
             email = serializer.validated_data['email']
             try:
-                user = User.objects.get(email__iexact=email) # Case-insensitive check
+                user = User.objects.get(email__iexact=email)
                 AuthToken.objects.filter(user=user, token_type='password_reset_otp').delete()
                 otp = generate_otp()
                 AuthToken.objects.create(user=user, otp_code=otp, token_type='password_reset_otp')
@@ -207,7 +195,6 @@ class PasswordResetRequestOTPView(APIView):
     
 class ResendPasswordResetOTPView(APIView):
     permission_classes = [AllowAny]
-
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
         if serializer.is_valid():
@@ -215,11 +202,9 @@ class ResendPasswordResetOTPView(APIView):
             try:
                 user = User.objects.get(email__iexact=email)
                 AuthToken.objects.filter(user=user, token_type='password_reset_otp', is_used=False).update(is_used=True)
-                
                 otp = generate_otp()
                 AuthToken.objects.create(user=user, otp_code=otp, token_type='password_reset_otp')
                 send_otp_email(user, otp, purpose="password reset")
-                
                 return Response({'message': 'New OTP for password reset has been sent to your email.'}, status=status.HTTP_200_OK)
             except User.DoesNotExist:
                 return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)

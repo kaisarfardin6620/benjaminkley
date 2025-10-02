@@ -19,7 +19,6 @@ from authentication.models import UserProfile, PasswordHistory
 from scans.models import Scan
 from contact_support.models import ContactMessage
 from .models import *
-#from scans.tasks import process_scan_and_save
 from notifications.utils import create_and_send_notification
 from .models import AdminNotification, SiteContent
 from fcm_django.models import FCMDevice
@@ -79,39 +78,53 @@ class UserManagementViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     serializer_class = DashboardUserSerializer
     queryset = User.objects.select_related('profile').prefetch_related('scans').order_by('-date_joined')
-    pagination_class = CustomDashboardPagination  # <-- FIX ADDED HERE
+    pagination_class = CustomDashboardPagination
     filter_backends = [filters.SearchFilter]
     search_fields = ['first_name', 'last_name', 'email']
 
     @action(detail=True, methods=['post'], url_path='block')
     def block_user(self, request, pk=None):
         profile = get_object_or_404(UserProfile, user_id=pk)
-        profile.status = 'Suspended'
+        profile.status = 'SUSPENDED'
         profile.save()
-        create_and_send_notification(user=profile.user, title="Account Suspended", message="Your account has been suspended. Please contact support for more information.")
+        create_and_send_notification(user=profile.user, title="Account Suspended", message="Your account has been suspended by an administrator. Please contact support for more information.")
         return Response({'status': 'User blocked successfully.'})
 
     @action(detail=True, methods=['post'], url_path='unblock')
     def unblock_user(self, request, pk=None):
         profile = get_object_or_404(UserProfile, user_id=pk)
-        profile.status = 'Active'
+        profile.status = 'ACTIVE'
         profile.save()
-        create_and_send_notification(user=profile.user, title="Account Re-activated", message="Your account has been re-activated and you can now use the app.")
+        create_and_send_notification(user=profile.user, title="Account Re-activated", message="Your account has been re-activated by an administrator.")
         return Response({'status': 'User unblocked successfully.'})
 
     @action(detail=True, methods=['post'], url_path='approve')
     def approve_user(self, request, pk=None):
-        profile = get_object_or_404(UserProfile, user_id=pk)
-        profile.status = 'Active'
+        user = get_object_or_404(User, pk=pk)
+        user.is_active = True
+        user.save()
+        profile = user.profile
+        profile.status = 'ACTIVE'
         profile.save()
-        create_and_send_notification(user=profile.user, title="Account Approved", message="Your account has been approved. You can now start using the app.")
-        return Response({'status': 'User approved successfully.'})
+        create_and_send_notification(
+            user=user,
+            title="Account Approved!",
+            message=f"Hi {user.first_name}, your account has been approved. You can now log in and use the app."
+        )
+        return Response({'status': 'User approved and notified successfully.'})
+
+    @action(detail=True, methods=['post'], url_path='deny')
+    def deny_user(self, request, pk=None):
+        user = get_object_or_404(User, pk=pk)
+        email = user.email
+        user.delete()
+        return Response({'status': f'User account for {email} has been denied and permanently deleted.'})
 
 class ScanManagementViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     serializer_class = DashboardScanSerializer
     queryset = Scan.objects.select_related('user').order_by('-created_at')
-    pagination_class = CustomDashboardPagination  # <-- FIX ADDED HERE
+    pagination_class = CustomDashboardPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = ScanDateFilter
     search_fields = ['name', 'user__email', 'user__first_name', 'user__last_name']
@@ -122,7 +135,7 @@ class ScanManagementViewSet(viewsets.ModelViewSet):
         scan = self.get_object()
         scan.status = Scan.Status.PROCESSING
         scan.save()
-        process_scan_and_save.delay(str(scan.id))
+        # process_scan_and_save.delay(str(scan.id)) # Assuming you might use this later with Celery
         create_and_send_notification(
             user=scan.user,
             title="Re-Scan Requested",
@@ -134,7 +147,7 @@ class ContactMessageViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     serializer_class = DashboardContactMessageSerializer
     queryset = ContactMessage.objects.all().order_by('-created_at')
-    pagination_class = CustomDashboardPagination  # <-- FIX ADDED HERE
+    pagination_class = CustomDashboardPagination
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'email', 'message']
     ordering_fields = ['created_at', 'is_replied']
@@ -145,7 +158,7 @@ class PushNotificationHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AdminNotification.objects.filter(
         notification_type=AdminNotification.NotificationType.PUSH_SENT
     ).order_by('-created_at')
-    pagination_class = CustomDashboardPagination  # <-- FIX ADDED HERE
+    pagination_class = CustomDashboardPagination
     filter_backends = [filters.SearchFilter]
     search_fields = ['title', 'message']
 
@@ -174,22 +187,19 @@ class AdminNotificationViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     serializer_class = AdminNotificationSerializer
     queryset = AdminNotification.objects.all().order_by('-created_at')
-    pagination_class = CustomDashboardPagination  # <-- FIX ADDED HERE
+    pagination_class = CustomDashboardPagination
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['is_read', 'notification_type']
 
     @action(detail=False, methods=['post'], url_path='mark-as-read')
     def mark_as_read(self, request):
         ids_to_mark = request.data.get('ids')
-
         if ids_to_mark is None:
             updated_count = self.get_queryset().filter(is_read=False).update(is_read=True)
             return Response({'message': f'Marked all {updated_count} unread notifications as read.'})
-
         if isinstance(ids_to_mark, list):
             updated_count = self.get_queryset().filter(id__in=ids_to_mark).update(is_read=True)
             return Response({'message': f'Marked {updated_count} selected notifications as read.'})
-    
         return Response({"error": "Invalid payload."}, status=status.HTTP_400_BAD_REQUEST)
 
 class SiteContentViewSet(viewsets.ModelViewSet):
@@ -241,6 +251,7 @@ class AdminChangePasswordView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class PrivacyPolicyAPIView(APIView):
+    authentication_classes = []
     permission_classes = [AllowAny]
     def get(self, request, *args, **kwargs):
         content = get_object_or_404(SiteContent, slug='privacy-policy')
@@ -248,6 +259,7 @@ class PrivacyPolicyAPIView(APIView):
         return Response(serializer.data)
 
 class TermsAndConditionsAPIView(APIView):
+    authentication_classes = []
     permission_classes = [AllowAny]
     def get(self, request, *args, **kwargs):
         content = get_object_or_404(SiteContent, slug='terms-and-conditions')

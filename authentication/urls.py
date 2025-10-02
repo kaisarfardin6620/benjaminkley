@@ -14,6 +14,7 @@ from .views import (
     ResendSignupOTPView,
     ResendPasswordResetOTPView,
     DeleteUserAccountAPIView,
+    AcceptTermsAPIView,
 )
 urlpatterns = [
     path('login/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
@@ -21,6 +22,7 @@ urlpatterns = [
     path('token/verify/', TokenVerifyView.as_view(), name='token_verify'),
     path('logout/', UserLogoutAPIView.as_view(), name='logout'),
     path('signup/', UserSignupAPIView.as_view(), name='signup'),
+    path('accept-terms/', AcceptTermsAPIView.as_view(), name='accept-terms'),
     path('signup/verify/', VerifySignupOTPView.as_view(), name='verify-signup-otp'),
     path('signup/resend-otp/', ResendSignupOTPView.as_view(), name='resend-signup-otp'),
     path('profile/', UserProfileAPIView.as_view(), name='user-profile'),
