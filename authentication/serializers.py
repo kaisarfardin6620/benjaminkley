@@ -84,6 +84,7 @@ class SignupSerializer(serializers.Serializer):
         profile.contact_number = validated_data.get('contact_number', profile.contact_number)
         profile.address = validated_data.get('address', profile.address)
         profile.profile_picture = validated_data.get('profile_picture', profile.profile_picture)
+        profile.has_accepted_terms = True
         profile.save()
         return user
 
