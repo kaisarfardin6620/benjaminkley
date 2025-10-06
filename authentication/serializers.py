@@ -193,16 +193,24 @@ class MyTokenObtainPairSerializer(serializers.Serializer):
         except User.DoesNotExist:
             raise serializers.ValidationError('No account found with this email address.')
 
+        if not user_obj.is_active:
+            try:
+                profile = user_obj.profile
+                if profile.status == 'UNVERIFIED':
+                    raise serializers.ValidationError('Your account is not active. Please verify your email first.')
+                elif profile.status == 'PENDING':
+                    raise serializers.ValidationError('Your account is awaiting admin approval.')
+                elif profile.status == 'SUSPENDED':
+                    raise serializers.ValidationError('Your account has been suspended by an administrator.')
+                else:
+                    raise serializers.ValidationError('This account is inactive.')
+            except UserProfile.DoesNotExist:
+                raise serializers.ValidationError('An error occurred with your profile. Please contact support.')
+
         user = authenticate(username=user_obj.username, password=password)
 
         if user is None:
             raise serializers.ValidationError('You have entered a wrong email or password.')
-
-        if not user.is_active and user.profile.status == 'PENDING':
-             raise serializers.ValidationError('Your account is awaiting admin approval.')
-
-        if not user.is_active:
-            raise serializers.ValidationError('This account is suspended or inactive.')
 
         refresh = RefreshToken.for_user(user)
 

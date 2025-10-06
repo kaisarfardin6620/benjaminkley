@@ -22,11 +22,12 @@ class UserProfile(models.Model):
     date_of_birth = models.DateField()
     contact_number = PhoneNumberField(region=None, blank=True, null=True)
     class Status(models.TextChoices):
+        UNVERIFIED = 'UNVERIFIED', 'Unverified'
         PENDING = 'PENDING', 'Pending'
         ACTIVE = 'ACTIVE', 'Active'
         SUSPENDED = 'SUSPENDED', 'Suspended'
 
-    status = models.CharField(max_length=50, choices=Status.choices, default=Status.PENDING)
+    status = models.CharField(max_length=50, choices=Status.choices, default=Status.UNVERIFIED)
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

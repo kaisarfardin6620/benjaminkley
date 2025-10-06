@@ -34,7 +34,7 @@ def send_email(subject, message, recipient_list):
 
 def send_otp_email(user, otp, purpose="account verification"):
     subject = f'Your OTP for {purpose}'
-    message = f'Hi {user.username},\n\nYour One-Time Password (OTP) is: {otp}\n\nIt is valid for 15 minutes.'
+    message = f'Hi {user.first_name},\n\nYour One-Time Password (OTP) is: {otp}\n\nIt is valid for 15 minutes.'
     return send_email(subject, message, [user.email])
 
 class UserSignupAPIView(APIView):
@@ -50,23 +50,11 @@ class UserSignupAPIView(APIView):
 
         user = serializer.save()
         
-        AdminNotification.objects.create(
-            notification_type=AdminNotification.NotificationType.NEW_USER,
-            message=f"New user requires approval: {user.get_full_name()} ({user.email})."
-        )
-
-        return Response({
-            "message": "Congratulations, you successfully signed up. You will receive an email notification as soon as your account is approved."
-        }, status=status.HTTP_201_CREATED)
-
-class AcceptTermsAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        profile = request.user.profile
-        profile.has_accepted_terms = True
-        profile.save()
-        return Response({"message": "Terms and conditions accepted successfully."}, status=status.HTTP_200_OK)
+        otp = generate_otp()
+        AuthToken.objects.create(user=user, otp_code=otp, token_type='signup')
+        send_otp_email(user, otp, purpose="email verification") 
+        
+        return Response({"message": "User registered. An OTP has been sent to your email to verify your account."}, status=status.HTTP_201_CREATED)
 
 class VerifySignupOTPView(APIView):
     permission_classes = [AllowAny]
@@ -80,22 +68,50 @@ class VerifySignupOTPView(APIView):
             return Response({'error': 'Invalid or expired OTP.'}, status=status.HTTP_400_BAD_REQUEST)
         
         user = token.user
-        user.is_active = True
-        user.save()
+        profile = user.profile
+
+        if profile.status == 'UNVERIFIED':
+            profile.status = 'PENDING'
+            profile.save()
+
+            AdminNotification.objects.create(
+                notification_type=AdminNotification.NotificationType.NEW_USER,
+                message=f"New user '{user.get_full_name()}' has verified their email and requires approval."
+            )
+            
+            approval_message = "Congratulations, you successfully signed up. You will receive an email notification as soon as your account is approved."
+            send_email("Welcome! Your account is awaiting approval", approval_message, [user.email])
+            create_and_send_notification(
+                user=user,
+                title="Account Pending Approval",
+                message=approval_message
+            )
+
         token.is_used = True
         token.save()
-        return Response({'message': 'OTP verified successfully. Your account is now active.'}, status=status.HTTP_200_OK)
+        return Response({'message': 'Email verified successfully. Your account is now awaiting admin approval.'}, status=status.HTTP_200_OK)
+
+class AcceptTermsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        profile = request.user.profile
+        profile.has_accepted_terms = True
+        profile.save()
+        return Response({"message": "Terms and conditions accepted successfully."}, status=status.HTTP_200_OK)
 
 class ResendSignupOTPView(APIView):
     permission_classes = [AllowAny]
     def post(self, request):
         serializer = ResendVerificationSerializer(data=request.data)
         if serializer.is_valid():
-            username = serializer.validated_data['username']
+            email = serializer.validated_data['email']
             try:
-                user = User.objects.get(username__iexact=username)
+                user = User.objects.get(email__iexact=email)
                 if user.is_active:
-                    return Response({'error': 'Account is already active.'}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({'error': 'This account is already active.'}, status=status.HTTP_400_BAD_REQUEST)
+                if user.profile.status != 'UNVERIFIED':
+                    return Response({'error': 'This account has already been verified and is pending approval.'}, status=status.HTTP_400_BAD_REQUEST)
+                
                 AuthToken.objects.filter(user=user, token_type='signup', is_used=False).update(is_used=True)
                 otp = generate_otp()
                 AuthToken.objects.create(user=user, otp_code=otp, token_type='signup')

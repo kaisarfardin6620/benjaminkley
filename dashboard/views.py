@@ -1,5 +1,3 @@
-# dashboard/views.py
-
 from httpx import request
 from rest_framework import viewsets, filters, status
 from rest_framework.views import APIView
@@ -28,6 +26,7 @@ from scans.filters import ScanDateFilter
 from .pagination import CustomDashboardPagination
 from django.http import FileResponse
 from scans.pdf_generator import generate_scan_pdf
+from authentication.views import send_email
 
 class DashboardStatsAPIView(APIView):
     permission_classes = [IsAdminUser]
@@ -86,28 +85,39 @@ class UserManagementViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='block')
     def block_user(self, request, pk=None):
-        profile = get_object_or_404(UserProfile, user_id=pk)
+        user = self.get_object()
+        profile = user.profile
         profile.status = 'SUSPENDED'
         profile.save()
-        create_and_send_notification(user=profile.user, title="Account Suspended", message="Your account has been suspended by an administrator. Please contact support for more information.")
+        create_and_send_notification(user=user, title="Account Suspended", message="Your account has been suspended by an administrator. Please contact support for more information.")
         return Response({'status': 'User blocked successfully.'})
 
     @action(detail=True, methods=['post'], url_path='unblock')
     def unblock_user(self, request, pk=None):
-        profile = get_object_or_404(UserProfile, user_id=pk)
+        user = self.get_object()
+        profile = user.profile
         profile.status = 'ACTIVE'
         profile.save()
-        create_and_send_notification(user=profile.user, title="Account Re-activated", message="Your account has been re-activated by an administrator.")
+        create_and_send_notification(user=user, title="Account Re-activated", message="Your account has been re-activated by an administrator.")
         return Response({'status': 'User unblocked successfully.'})
 
     @action(detail=True, methods=['post'], url_path='approve')
     def approve_user(self, request, pk=None):
-        user = get_object_or_404(User, pk=pk)
+        user = self.get_object()
+        profile = user.profile
+        
+        if user.is_active and profile.status == 'ACTIVE':
+            return Response({'status': 'User is already active.'}, status=status.HTTP_400_BAD_REQUEST)
+
         user.is_active = True
         user.save()
-        profile = user.profile
         profile.status = 'ACTIVE'
         profile.save()
+
+        approval_subject = "Your Account has been Approved!"
+        approval_message = f"Hi {user.first_name},\n\nCongratulations! Your account has been approved. You can now log in and use the app."
+        send_email(approval_subject, approval_message, [user.email])
+        
         create_and_send_notification(
             user=user,
             title="Account Approved!",
@@ -117,9 +127,13 @@ class UserManagementViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='deny')
     def deny_user(self, request, pk=None):
-        user = get_object_or_404(User, pk=pk)
+        user = self.get_object()
         email = user.email
         user.delete()
+        
+        rejection_message = "We regret to inform you that your application for an account was not approved at this time."
+        send_email("Account Application Update", rejection_message, [email])
+
         return Response({'status': f'User account for {email} has been denied and permanently deleted.'})
 
 class ScanManagementViewSet(viewsets.ModelViewSet):
