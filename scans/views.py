@@ -53,22 +53,24 @@ class ScanViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'], url_path='download-pdf')
     def download_pdf(self, request, pk=None):
-        try:
-            scan = self.get_object()
-        except Scan.DoesNotExist:
-            return Response({"error": "Scan not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        # DEBUG: Check if the image field has a file attached
-        if scan.image_front:
-            print(f"DEBUG: image_front exists. File size: {scan.image_front.size} bytes.")
-        else:
-            print("DEBUG: image_front does not exist or is not attached to the scan object.")
-
+        scan = self.get_object()
         pdf_buffer = generate_scan_pdf(scan)
-
-        return FileResponse(
+        response = FileResponse(
             pdf_buffer,
             as_attachment=True,
             filename=f'scan_report_{scan.id}.pdf',
             content_type='application/pdf'
         )
+        return response
+
+    @action(detail=True, methods=['get'], url_path='view-pdf')
+    def view_pdf(self, request, pk=None):
+        scan = self.get_object()
+        pdf_buffer = generate_scan_pdf(scan)
+        response = FileResponse(
+            pdf_buffer,
+            as_attachment=False,
+            filename=f'scan_report_{scan.id}.pdf',
+            content_type='application/pdf'
+        )
+        return response

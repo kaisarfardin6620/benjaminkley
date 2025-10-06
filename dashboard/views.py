@@ -26,6 +26,8 @@ from firebase_admin import messaging
 from django_filters.rest_framework import DjangoFilterBackend
 from scans.filters import ScanDateFilter
 from .pagination import CustomDashboardPagination
+from django.http import FileResponse
+from scans.pdf_generator import generate_scan_pdf
 
 class DashboardStatsAPIView(APIView):
     permission_classes = [IsAdminUser]
@@ -130,12 +132,35 @@ class ScanManagementViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'user__email', 'user__first_name', 'user__last_name']
     ordering_fields = ['created_at', 'status']
 
+    @action(detail=True, methods=['get'], url_path='download-pdf')
+    def download_pdf(self, request, pk=None):
+        scan = self.get_object()
+        pdf_buffer = generate_scan_pdf(scan)
+        response = FileResponse(
+            pdf_buffer,
+            as_attachment=True,
+            filename=f'scan_report_{scan.id}.pdf',
+            content_type='application/pdf'
+        )
+        return response
+
+    @action(detail=True, methods=['get'], url_path='view-pdf')
+    def view_pdf(self, request, pk=None):
+        scan = self.get_object()
+        pdf_buffer = generate_scan_pdf(scan)
+        response = FileResponse(
+            pdf_buffer,
+            as_attachment=False,
+            filename=f'scan_report_{scan.id}.pdf',
+            content_type='application/pdf'
+        )
+        return response
+
     @action(detail=True, methods=['post'], url_path='rescan')
     def request_rescan(self, request, pk=None):
         scan = self.get_object()
         scan.status = Scan.Status.PROCESSING
         scan.save()
-        # process_scan_and_save.delay(str(scan.id)) # Assuming you might use this later with Celery
         create_and_send_notification(
             user=scan.user,
             title="Re-Scan Requested",

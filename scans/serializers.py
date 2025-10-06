@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Scan
 from django.conf import settings
+from django.urls import reverse
 
 class ScanCreateSerializer(serializers.ModelSerializer):
     class Meta:
@@ -24,6 +25,7 @@ class ScanDetailSerializer(serializers.ModelSerializer):
     
     scan_images = serializers.SerializerMethodField()
     reconstructed_3d_head = serializers.SerializerMethodField()
+    pdf_report_url = serializers.SerializerMethodField()
     
     Head_Width = serializers.CharField(source='head_width')
     Head_Length = serializers.CharField(source='head_length')
@@ -41,6 +43,7 @@ class ScanDetailSerializer(serializers.ModelSerializer):
             'status',
             'scan_images',
             'reconstructed_3d_head',
+            'pdf_report_url',
             'Head_Width',
             'Head_Length',
             'Ear_to_Ear',
@@ -55,39 +58,34 @@ class ScanDetailSerializer(serializers.ModelSerializer):
     def get_scan_images(self, obj):
         images = []
         thumbnail = None
-
         def get_full_url(image_field):
             if image_field and hasattr(image_field, 'url'):
                 if settings.USE_S3_STORAGE:
                     return image_field.url
                 return f"{settings.SERVER_BASE_URL}{image_field.url}"
             return None
-
         front_url = get_full_url(obj.image_front)
         if front_url:
             thumbnail = front_url
             images.append(front_url)
-        
         back_url = get_full_url(obj.image_back)
-        if back_url:
-            images.append(back_url)
-            
+        if back_url: images.append(back_url)
         left_url = get_full_url(obj.image_left)
-        if left_url:
-            images.append(left_url)
-
+        if left_url: images.append(left_url)
         right_url = get_full_url(obj.image_right)
-        if right_url:
-            images.append(right_url)
-        
-        return {
-            "thumbnail": thumbnail,
-            "all_images": images
-        }
+        if right_url: images.append(right_url)
+        return {"thumbnail": thumbnail, "all_images": images}
 
     def get_reconstructed_3d_head(self, obj):
         if obj.processed_3d_model and hasattr(obj.processed_3d_model, 'url'):
             if settings.USE_S3_STORAGE:
                 return obj.processed_3d_model.url
             return f"{settings.SERVER_BASE_URL}{obj.processed_3d_model.url}"
+        return None
+
+    def get_pdf_report_url(self, obj):
+        if obj.status == Scan.Status.COMPLETED:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(reverse('scan-view-pdf', kwargs={'pk': obj.pk}))
         return None

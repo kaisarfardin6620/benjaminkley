@@ -6,6 +6,7 @@ from contact_support.models import ContactMessage
 from .models import AdminNotification, SiteContent
 from authentication.serializers import PasswordValidator
 from django.conf import settings 
+from django.urls import reverse
 
 class DashboardUserSerializer(serializers.ModelSerializer):
     role = serializers.CharField(source='profile.role', read_only=True)
@@ -53,6 +54,8 @@ class DashboardScanSerializer(serializers.ModelSerializer):
     image_back_url = serializers.SerializerMethodField()
     image_left_url = serializers.SerializerMethodField()
     image_right_url = serializers.SerializerMethodField()
+    pdf_report_url = serializers.SerializerMethodField()
+    
     head_width = serializers.CharField()
     head_height = serializers.CharField() 
     head_length = serializers.CharField()
@@ -76,12 +79,20 @@ class DashboardScanSerializer(serializers.ModelSerializer):
             'scan_id', 'name', 'email', 'submission_date', 'status', 'notes', 'custom_field',
             'reconstructed_3d_head', 'image_front_url', 'image_back_url',
             'image_left_url', 'image_right_url',
+            'pdf_report_url',
             'head_width', 'head_height', 'head_length', 'ear_to_ear', 'eye_to_eye',
             'head_circumference_A', 'forehead_to_back_B', 'cross_measurement_C',
             'under_chin_D', 'eyebrow_to_earlobe_E', 'eye_corner_to_ear_F',
             'ear_height_G', 'ear_width_H', 'cheek_guard_clearance_L',
             'cheek_guard_height_M', 'cheek_guard_width_N'
         )
+
+    def get_pdf_report_url(self, obj):
+        if obj.status == Scan.Status.COMPLETED:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(reverse('dashboard-scan-view-pdf', kwargs={'pk': obj.pk}))
+        return None
 
     def get_reconstructed_3d_head(self, obj):
         if obj.processed_3d_model and hasattr(obj.processed_3d_model, 'url'):
