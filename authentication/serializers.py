@@ -83,7 +83,6 @@ class SignupSerializer(serializers.Serializer):
         profile.date_of_birth = validated_data.get('date_of_birth', profile.date_of_birth)
         profile.contact_number = validated_data.get('contact_number', profile.contact_number)
         profile.address = validated_data.get('address', profile.address)
-        profile.profile_picture = validated_data.get('profile_picture', profile.profile_picture)
         profile.has_accepted_terms = True
         profile.save()
         return user
@@ -212,6 +211,16 @@ class MyTokenObtainPairSerializer(serializers.Serializer):
         if user is None:
             raise serializers.ValidationError('You have entered a wrong email or password.')
 
+        try:
+            profile = user.profile
+            profile.login_count += 1
+            profile.save(update_fields=['login_count'])
+        except UserProfile.DoesNotExist:
+            profile, created = UserProfile.objects.get_or_create(user=user)
+            if created:
+                profile.login_count = 1
+                profile.save(update_fields=['login_count'])
+        
         refresh = RefreshToken.for_user(user)
 
         fcmToken = attrs.get('fcmToken')
@@ -234,7 +243,8 @@ class MyTokenObtainPairSerializer(serializers.Serializer):
                 "id": user.pk,
                 "email": user.email,
                 "role": "ADMIN" if user.is_staff else user.profile.role,
-                "has_accepted_terms": user.profile.has_accepted_terms
+                "has_accepted_terms": user.profile.has_accepted_terms,
+                "login_count": user.profile.login_count
             },
             "token": str(refresh.access_token),
             "refresh_token": str(refresh)

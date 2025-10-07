@@ -33,6 +33,7 @@ class UserProfile(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     address = models.CharField(max_length=255)
     has_accepted_terms = models.BooleanField(default=False)
+    login_count = models.PositiveIntegerField(default=0)
 
     def __repr__(self):
         return f"<User object: {self.user.first_name} {self.user.last_name}>"
