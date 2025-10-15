@@ -1,5 +1,3 @@
-# benjaminkley/settings.py
-
 from pathlib import Path
 from datetime import timedelta
 import os
@@ -17,7 +15,6 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 ROOT_URLCONF = 'benjaminkley.urls'
 
-# --- HOSTING & SECURITY ---
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
 CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:8080').split(',')
 SERVER_BASE_URL = os.getenv('SERVER_BASE_URL', 'http://localhost:8080')
@@ -57,7 +54,6 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# --- DATABASE ---
 DATABASES = {
     'default': dj_database_url.config(
         default=os.getenv('DATABASE_URL', f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
@@ -66,23 +62,17 @@ DATABASES = {
     )
 }
 
-# --- MASTER SWITCH FOR CLOUD STORAGE ---
 USE_S3_STORAGE = os.getenv('USE_S3_STORAGE', 'False').lower() == 'true'
 
-# --- STATIC & MEDIA FILES ---
 AI_MODELS_DIR = BASE_DIR / 'ai_models'
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# --- THIS IS THE FIX ---
-# Define the local storage defaults *before* the conditional S3 block.
-# This ensures MEDIA_ROOT is always set, preventing the permission error.
 MEDIA_URL = '/media/'
 MEDIA_ROOT = '/app/media'
 
 
 if USE_S3_STORAGE:
-    # --- S3 Storage Configuration ---
     DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
     AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')
     AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME')
@@ -90,15 +80,12 @@ if USE_S3_STORAGE:
     AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
     AWS_S3_ADDRESSING_STYLE = "virtual"
 
-    # --- Configuration for Private Buckets (generates temporary, secure URLs) ---
     AWS_S3_SIGNATURE_VERSION = 's3v4'
-    AWS_QUERYSTRING_AUTH = True  # Generates presigned URLs
-    AWS_QUERYSTRING_EXPIRE = 3600  # URL valid for 1 hour (in seconds)
+    AWS_QUERYSTRING_AUTH = True  
+    AWS_QUERYSTRING_EXPIRE = 3600 
 
-    # Overwrite MEDIA_URL with the S3 path when S3 is active
     MEDIA_URL = f'https://{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com/'
 
-# --- TEMPLATES & REST OF DJANGO SETTINGS ---
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -203,3 +190,12 @@ LOGGING = {
         },
     },
 }
+
+CELERY_BROKER_URL = 'redis://redis:6379/0'
+CELERY_RESULT_BACKEND = 'redis://redis:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+
+USE_X_FORWARDED_HOST = True

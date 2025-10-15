@@ -6,7 +6,7 @@ from django.http import FileResponse
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Scan
 from .serializers import ScanCreateSerializer, ScanDetailSerializer
-from .utils import process_scan_and_save
+from .tasks import process_scan_and_save 
 from .pagination import ScanListPagination
 from .filters import ScanDateFilter
 from dashboard.pagination import CustomDashboardPagination
@@ -35,10 +35,7 @@ class ScanViewSet(viewsets.ModelViewSet):
         self.perform_create(serializer)
         scan = serializer.instance
         
-        try:
-            process_scan_and_save(str(scan.id))
-        except Exception as e:
-            print(f"Error processing scan for {scan.id}: {e}")
+        process_scan_and_save.delay(str(scan.id))
         
         detail_serializer = ScanDetailSerializer(scan, context={'request': request})
         

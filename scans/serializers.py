@@ -2,6 +2,8 @@ from rest_framework import serializers
 from .models import Scan
 from django.conf import settings
 from django.urls import reverse
+from core.utils import get_full_media_url
+from urllib.parse import urljoin
 
 class ScanCreateSerializer(serializers.ModelSerializer):
     class Meta:
@@ -56,35 +58,25 @@ class ScanDetailSerializer(serializers.ModelSerializer):
         return obj.name if obj.name else "N/A"
 
     def get_scan_images(self, obj):
+        request = self.context.get('request')
         images = []
-        thumbnail = None
-        def get_full_url(image_field):
-            if image_field and hasattr(image_field, 'url'):
-                if settings.USE_S3_STORAGE:
-                    return image_field.url
-                return f"{settings.SERVER_BASE_URL}{image_field.url}"
-            return None
-        front_url = get_full_url(obj.image_front)
+        front_url = get_full_media_url(request, obj.image_front)
         if front_url:
-            thumbnail = front_url
             images.append(front_url)
-        back_url = get_full_url(obj.image_back)
+        back_url = get_full_media_url(request, obj.image_back)
         if back_url: images.append(back_url)
-        left_url = get_full_url(obj.image_left)
+        left_url = get_full_media_url(request, obj.image_left)
         if left_url: images.append(left_url)
-        right_url = get_full_url(obj.image_right)
+        right_url = get_full_media_url(request, obj.image_right)
         if right_url: images.append(right_url)
-        return {"thumbnail": thumbnail, "all_images": images}
+        return {"thumbnail": front_url, "all_images": images}
 
     def get_reconstructed_3d_head(self, obj):
-        if obj.processed_3d_model and hasattr(obj.processed_3d_model, 'url'):
-            if settings.USE_S3_STORAGE:
-                return obj.processed_3d_model.url
-            return f"{settings.SERVER_BASE_URL}{obj.processed_3d_model.url}"
-        return None
+        request = self.context.get('request')
+        return get_full_media_url(request, obj.processed_3d_model)
 
     def get_pdf_report_url(self, obj):
         if obj.status == Scan.Status.COMPLETED:
             path = reverse('scan-view-pdf', kwargs={'pk': obj.pk})
-            return f"{settings.SERVER_BASE_URL}{path}"
+            return urljoin(str(settings.SERVER_BASE_URL), path)
         return None

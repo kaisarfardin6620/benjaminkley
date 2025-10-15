@@ -6,8 +6,8 @@ from rest_framework.permissions import IsAdminUser, AllowAny
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.contrib.auth.models import User
+from django.db.models import Count, Model 
 from django.db.models.functions import TruncMonth
-from django.db.models import Count
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from datetime import timedelta
@@ -59,21 +59,33 @@ class DashboardStatsAPIView(APIView):
             "total_3d_head_scanner": {"count": total_scans, "change": scan_change},
         })
 
-class UserOverviewChartAPIView(APIView):
+class MonthlyOverviewChartAPIView(APIView):
     permission_classes = [IsAdminUser]
-    def get(self, request):
-        data = User.objects.annotate(month=TruncMonth('date_joined')).values('month').annotate(count=Count('id')).order_by('month')
-        monthly_counts = {item['month'].month: item['count'] for item in data if item['month']}
-        final_data = [monthly_counts.get(i, 0) for i in range(1, 13)]
-        return Response({"labels": [calendar.month_abbr[i] for i in range(1, 13)], "data": final_data})
+    model: Model = None
+    date_field: str = ''
+    def get(self, request, *args, **kwargs):
+        if not self.model or not self.date_field:
+            return Response(
+                {"error": "Chart view is not configured correctly."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-class ScannerOverviewChartAPIView(APIView):
-    permission_classes = [IsAdminUser]
-    def get(self, request):
-        data = Scan.objects.annotate(month=TruncMonth('created_at')).values('month').annotate(count=Count('id')).order_by('month')
+        data = self.model.objects.annotate(month=TruncMonth(self.date_field)) \
+            .values('month') \
+            .annotate(count=Count('id')) \
+            .order_by('month')
+
         monthly_counts = {item['month'].month: item['count'] for item in data if item['month']}
         final_data = [monthly_counts.get(i, 0) for i in range(1, 13)]
-        return Response({"labels": [calendar.month_abbr[i] for i in range(1, 13)], "data": final_data})
+        labels = [calendar.month_abbr[i] for i in range(1, 13)]
+
+        return Response({"labels": labels, "data": final_data})
+class UserOverviewChartAPIView(MonthlyOverviewChartAPIView):
+    model = User
+    date_field = 'date_joined'
+class ScannerOverviewChartAPIView(MonthlyOverviewChartAPIView):
+    model = Scan
+    date_field = 'created_at'
 
 class UserManagementViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]

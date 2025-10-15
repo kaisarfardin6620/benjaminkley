@@ -11,6 +11,7 @@ from django.urls import reverse
 from fcm_django.models import FCMDevice
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
+from core.utils import get_full_media_url
 
 class RoleChoiceField(serializers.ChoiceField):
     def to_internal_value(self, data):
@@ -25,7 +26,8 @@ class PasswordValidator:
         sha1 = hashlib.sha1(password.encode()).hexdigest().upper()
         prefix, suffix = sha1[:5], sha1[5:]
         try:
-            response = requests.get(f"https://api.pwnedpasswords.com/range/{prefix}", timeout=3)
+            api_url = getattr(settings, 'PWNED_PASSWORDS_API_URL', 'https://api.pwnedpasswords.com/range/')
+            response = requests.get(f"{api_url}{prefix}", timeout=3)
             return suffix in response.text
         except requests.RequestException:
             return False
@@ -131,11 +133,8 @@ class ProfileSerializer(serializers.ModelSerializer):
         ]
 
     def get_profile_picture(self, obj):
-        if obj.profile_picture and hasattr(obj.profile_picture, 'url'):
-            if settings.USE_S3_STORAGE:
-                return obj.profile_picture.url
-            return f"{settings.SERVER_BASE_URL}{obj.profile_picture.url}"
-        return None
+        request = self.context.get('request')
+        return get_full_media_url(request, obj.profile_picture)
 
 class UpdateProfileSerializer(serializers.Serializer):
     first_name = serializers.CharField(required=False)
@@ -155,8 +154,8 @@ class UpdateProfileSerializer(serializers.Serializer):
         profile.clinic_name = validated_data.get('clinic_name', profile.clinic_name)
         profile.date_of_birth = validated_data.get('date_of_birth', profile.date_of_birth)
         profile.address = validated_data.get('address', profile.address)
-        instance.save()  
-        profile.save()   
+        instance.save()
+        profile.save()
         return instance
 
 class ProfilePictureSerializer(serializers.ModelSerializer):
@@ -176,7 +175,6 @@ class MyTokenObtainPairSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
     fcmToken = serializers.CharField(required=False, write_only=True, allow_blank=True)
     device_type = serializers.ChoiceField(choices=[('ios', 'ios'), ('android', 'android'), ('web', 'web')], required=False, write_only=True)
-    
     class Meta:
         fields = ['email', 'password', 'fcmToken', 'device_type']
 
@@ -220,7 +218,6 @@ class MyTokenObtainPairSerializer(serializers.Serializer):
             if created:
                 profile.login_count = 1
                 profile.save(update_fields=['login_count'])
-        
         refresh = RefreshToken.for_user(user)
 
         fcmToken = attrs.get('fcmToken')
@@ -252,7 +249,6 @@ class MyTokenObtainPairSerializer(serializers.Serializer):
 
 class LogoutSerializer(serializers.Serializer):
     refresh = serializers.CharField()
-    
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
@@ -272,7 +268,6 @@ class SetNewPasswordSerializer(serializers.Serializer):
                 "new_password": "This password is too common and has been seen before. Please choose a more unique password."
             })
         return data
-    
 class DeleteAccountSerializer(serializers.Serializer):
     password = serializers.CharField(
         write_only=True,

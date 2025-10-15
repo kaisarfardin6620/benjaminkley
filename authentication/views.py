@@ -13,7 +13,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.parsers import MultiPartParser, FormParser
 from .models import AuthToken, UserProfile, PasswordHistory
 from .serializers import (
-    SignupSerializer, OTPVerificationSerializer, ChangePasswordSerializer, 
+    SignupSerializer, OTPVerificationSerializer, ChangePasswordSerializer,
     ProfileSerializer, UpdateProfileSerializer,ResendVerificationSerializer, MyTokenObtainPairSerializer, LogoutSerializer,
     PasswordResetRequestSerializer, PasswordResetVerifyOTPSerializer, SetNewPasswordSerializer,DeleteAccountSerializer
 )
@@ -40,7 +40,6 @@ def send_otp_email(user, otp, purpose="account verification"):
 class UserSignupAPIView(APIView):
     permission_classes = [AllowAny]
     parser_classes = [MultiPartParser, FormParser]
-    
     def post(self, request):
         serializer = SignupSerializer(data=request.data)
         if not serializer.is_valid():
@@ -49,11 +48,9 @@ class UserSignupAPIView(APIView):
             return Response({"message": message, "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
         user = serializer.save()
-        
         otp = generate_otp()
         AuthToken.objects.create(user=user, otp_code=otp, token_type='signup')
-        send_otp_email(user, otp, purpose="email verification") 
-        
+        send_otp_email(user, otp, purpose="email verification")
         return Response({"message": "User registered. An OTP has been sent to your email to verify your account."}, status=status.HTTP_201_CREATED)
 
 class VerifySignupOTPView(APIView):
@@ -66,7 +63,6 @@ class VerifySignupOTPView(APIView):
             token = AuthToken.objects.get(otp_code=otp, token_type='signup', is_used=False, expires_at__gt=timezone.now())
         except AuthToken.DoesNotExist:
             return Response({'error': 'Invalid or expired OTP.'}, status=status.HTTP_400_BAD_REQUEST)
-        
         user = token.user
         profile = user.profile
 
@@ -78,7 +74,6 @@ class VerifySignupOTPView(APIView):
                 notification_type=AdminNotification.NotificationType.NEW_USER,
                 message=f"New user '{user.get_full_name()}' has verified their email and requires approval."
             )
-            
             approval_message = "Congratulations, you successfully signed up. You will receive an email notification as soon as your account is approved."
             send_email("Welcome! Your account is awaiting approval", approval_message, [user.email])
             create_and_send_notification(
@@ -111,7 +106,6 @@ class ResendSignupOTPView(APIView):
                     return Response({'error': 'This account is already active.'}, status=status.HTTP_400_BAD_REQUEST)
                 if user.profile.status != 'UNVERIFIED':
                     return Response({'error': 'This account has already been verified and is pending approval.'}, status=status.HTTP_400_BAD_REQUEST)
-                
                 AuthToken.objects.filter(user=user, token_type='signup', is_used=False).update(is_used=True)
                 otp = generate_otp()
                 AuthToken.objects.create(user=user, otp_code=otp, token_type='signup')
@@ -120,7 +114,6 @@ class ResendSignupOTPView(APIView):
             except User.DoesNotExist:
                 return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
 class MyTokenObtainPairView(APIView):
     permission_classes = [AllowAny]
     serializer_class = MyTokenObtainPairSerializer
@@ -129,7 +122,6 @@ class MyTokenObtainPairView(APIView):
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
         return Response(serializer.validated_data, status=status.HTTP_200_OK)
-        
 class UserLogoutAPIView(APIView):
     permission_classes = [IsAuthenticated]
     def post(self, request):
@@ -146,7 +138,7 @@ class UserLogoutAPIView(APIView):
 class UserProfileAPIView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):
-        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        profile = request.user.profile
         serializer = ProfileSerializer(profile, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -156,7 +148,7 @@ class UpdateProfileAPIView(APIView):
 
     def put(self, request):
         user = request.user
-        profile, _ = UserProfile.objects.get_or_create(user=user)
+        profile = user.profile
         serializer = UpdateProfileSerializer(
             instance=user,
             data=request.data,
@@ -173,7 +165,6 @@ class UpdateProfileAPIView(APIView):
             )
             return Response(ProfileSerializer(profile, context={'request': request}).data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
 class ChangePasswordAPIView(APIView):
     permission_classes = [IsAuthenticated]
     def post(self, request):
@@ -208,7 +199,6 @@ class PasswordResetRequestOTPView(APIView):
             except User.DoesNotExist:
                 return Response({'error': 'No active account found with this email address.'}, status=status.HTTP_404_NOT_FOUND)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
 class ResendPasswordResetOTPView(APIView):
     permission_classes = [AllowAny]
     def post(self, request):
@@ -234,7 +224,7 @@ class VerifyPasswordResetOTPView(APIView):
         otp = serializer.validated_data['otp']
         try:
             token = AuthToken.objects.get(
-                otp_code=otp, token_type='password_reset_otp', 
+                otp_code=otp, token_type='password_reset_otp',
                 is_used=False, expires_at__gt=timezone.now()
             )
         except AuthToken.DoesNotExist:
