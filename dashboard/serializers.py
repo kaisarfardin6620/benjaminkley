@@ -89,9 +89,8 @@ class DashboardScanSerializer(serializers.ModelSerializer):
 
     def get_pdf_report_url(self, obj):
         if obj.status == Scan.Status.COMPLETED:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(reverse('dashboard-scan-view-pdf', kwargs={'pk': obj.pk}))
+            path = reverse('dashboard-scan-view-pdf', kwargs={'pk': obj.pk})
+            return f"{settings.SERVER_BASE_URL}{path}"
         return None
 
     def get_reconstructed_3d_head(self, obj):

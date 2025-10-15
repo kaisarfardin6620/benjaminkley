@@ -85,7 +85,6 @@ class ScanDetailSerializer(serializers.ModelSerializer):
 
     def get_pdf_report_url(self, obj):
         if obj.status == Scan.Status.COMPLETED:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(reverse('scan-view-pdf', kwargs={'pk': obj.pk}))
+            path = reverse('scan-view-pdf', kwargs={'pk': obj.pk})
+            return f"{settings.SERVER_BASE_URL}{path}"
         return None
