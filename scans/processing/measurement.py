@@ -7,11 +7,11 @@ AVG_IPD_CM = 6.3
 HEAD_WIDTH_ADJUSTMENT = 1.10
 HEAD_LENGTH_ADJUSTMENT_SIDE_VIEW = 1.15
 HEAD_HEIGHT_ADJUSTMENT_SIDE_VIEW = 1.20
-ESTIMATED_LENGTH_FROM_WIDTH_RATIO = 1.30
-ESTIMATED_HEIGHT_FROM_WIDTH_RATIO = 1.50
+ESTIMATED_LENGTH_FROM_WIDTH_RATIO = 1.25 
+ESTIMATED_HEIGHT_FROM_WIDTH_RATIO = 1.35
 ESTIMATED_EAR_HEIGHT_FROM_HEAD_HEIGHT_RATIO = 0.30
 EAR_TO_EAR_FROM_WIDTH_RATIO = 1.4
-HEAD_CIRCUMFERENCE_FROM_DIMS_ADJUSTMENT = 1.1 
+HEAD_CIRCUMFERENCE_FROM_DIMS_ADJUSTMENT = 1.1
 FOREHEAD_TO_BACK_FROM_LENGTH_RATIO = 1.3
 UNDER_CHIN_FROM_HEIGHT_RATIO = 1.2
 EYEBROW_TO_EARLOBE_FROM_HEIGHT_RATIO = 0.5
@@ -57,7 +57,7 @@ def get_measurements_from_images(front_image_path: str, side_image_path: str) ->
             head_width_cm = np.linalg.norm(
                 np.array([landmarks_front[234].x * img_w, landmarks_front[234].y * img_h]) - 
                 np.array([landmarks_front[454].x * img_w, landmarks_front[454].y * img_h])
-            ) * CM_PER_PIXEL * HEAD_WIDTH_ADJUSTMENT 
+            ) * CM_PER_PIXEL * HEAD_WIDTH_ADJUSTMENT
 
     except Exception as e:
         print(f"FATAL ERROR during FRONT image processing: {e}")
@@ -90,7 +90,7 @@ def get_measurements_from_images(front_image_path: str, side_image_path: str) ->
             print("Side image processed successfully.")
 
     except Exception as e:
-        print(f"WARNING: Could not process side image ({e}). Estimating depth and height from front image measurements.")
+        print(f"WARNING: Could not process side image ({e}). Using more realistic anatomical ratios for estimation.")
         head_length_cm = head_width_cm * ESTIMATED_LENGTH_FROM_WIDTH_RATIO
         head_height_cm = head_width_cm * ESTIMATED_HEIGHT_FROM_WIDTH_RATIO
         ear_height_G_cm = head_height_cm * ESTIMATED_EAR_HEIGHT_FROM_HEAD_HEIGHT_RATIO
