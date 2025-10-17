@@ -6,11 +6,16 @@ import numpy as np
 from typing import Dict
 
 # --- ANATOMICAL CONSTANTS (in Centimeters) ---
-AVG_FACE_WIDTH = 13.7  # Bizygomatic width (cheekbone to cheekbone)
-AVG_FACE_HEIGHT = 11.0 # Vertical distance from top of forehead landmarks to chin
+AVG_FACE_WIDTH = 13.7  # Bizygomatic width (cheekbone to cheekbone). Our single source of truth for scaling.
 
-# --- ROBUST FALLBACK RATIOS (THE SAFETY NET) ---
-# Used ONLY if the side-view image processing fails.
+# --- REALISTIC ADJUSTMENT & FALLBACK RATIOS ---
+# These factors account for the fact that landmarks don't cover the full head.
+# They are used to extrapolate from the landmark bounding box to the full cranium size.
+HEAD_WIDTH_ADJUSTMENT = 1.10  # From face width to full head width
+SIDE_HEIGHT_ADJUSTMENT = 1.35 # From face landmark height to full head height
+SIDE_LENGTH_ADJUSTMENT = 1.45 # From face landmark depth to full head depth
+
+# Fallback ratios (if side view fails completely)
 ESTIMATED_HEIGHT_FROM_WIDTH_RATIO = 1.35
 ESTIMATED_LENGTH_FROM_WIDTH_RATIO = 1.25
 
@@ -18,11 +23,11 @@ class MeasurementError(Exception):
     pass
 
 def get_measurements_from_images(front_image_path: str, side_image_path: str) -> Dict[str, float]:
-    print("--- Starting FINAL robust measurement process ---")
+    print("--- Starting SINGLE-SOURCE-SCALE measurement process ---")
     mp_face_mesh = mp.solutions.face_mesh
     
     # =========================================================================
-    #  STEP 1: Process FRONT IMAGE. This is mandatory.
+    #  STEP 1: Establish ONE TRUE SCALE from the front image. This is mandatory.
     # =========================================================================
     try:
         front_image = cv2.imread(front_image_path)
@@ -41,20 +46,21 @@ def get_measurements_from_images(front_image_path: str, side_image_path: str) ->
             
             if face_width_pixels < 50: raise MeasurementError("Face detection unclear in front image.")
 
-            FRONT_CM_PER_PIXEL = AVG_FACE_WIDTH / face_width_pixels
-            print(f"Front image scale: {FRONT_CM_PER_PIXEL:.4f} cm/pixel")
+            # THIS IS OUR ONE, RELIABLE SCALE. WE WILL USE IT FOR EVERYTHING.
+            CM_PER_PIXEL = AVG_FACE_WIDTH / face_width_pixels
+            print(f"MASTER SCALE established: {CM_PER_PIXEL:.4f} cm/pixel")
 
-            head_width_cm = face_width_pixels * FRONT_CM_PER_PIXEL * 1.1
+            head_width_cm = face_width_pixels * CM_PER_PIXEL * HEAD_WIDTH_ADJUSTMENT
             
             p_left_pupil = np.array([landmarks[473].x * img_w, landmarks[473].y * img_h])
             p_right_pupil = np.array([landmarks[468].x * img_w, landmarks[468].y * img_h])
-            eye_to_eye_cm = np.linalg.norm(p_left_pupil - p_right_pupil) * FRONT_CM_PER_PIXEL
+            eye_to_eye_cm = np.linalg.norm(p_left_pupil - p_right_pupil) * CM_PER_PIXEL
     
     except Exception as e:
         raise MeasurementError(f"CRITICAL FAILURE in front image processing: {e}")
 
     # =========================================================================
-    #  STEP 2: TRY to process SIDE IMAGE. If it fails, we fall back gracefully.
+    #  STEP 2: Use the side image ONLY for shape (in pixels), then apply MASTER SCALE.
     # =========================================================================
     try:
         side_image = cv2.imread(side_image_path)
@@ -62,45 +68,37 @@ def get_measurements_from_images(front_image_path: str, side_image_path: str) ->
         
         with mp_face_mesh.FaceMesh(static_image_mode=True, max_num_faces=1, refine_landmarks=True, min_detection_confidence=0.5) as face_mesh:
             results_side = face_mesh.process(cv2.cvtColor(side_image, cv2.COLOR_BGR2RGB))
-            if not results_side.multi_face_landmarks: raise MeasurementError("No face in side image.") # This will trigger the fallback
+            if not results_side.multi_face_landmarks: raise MeasurementError("No face in side image.")
 
             landmarks_side = results_side.multi_face_landmarks[0].landmark
             side_h, side_w, _ = side_image.shape
             
+            # Get the bounding box of the FACE landmarks in the side view.
             all_x = [lm.x * side_w for lm in landmarks_side]
             all_y = [lm.y * side_h for lm in landmarks_side]
-            bbox_width_pixels = max(all_x) - min(all_x)
-            bbox_height_pixels = max(all_y) - min(all_y)
+            face_bbox_width_pixels = max(all_x) - min(all_x)
+            face_bbox_height_pixels = max(all_y) - min(all_y)
             
-            p_forehead_top = np.array([landmarks_side[10].y * side_h])
-            p_chin_bottom = np.array([landmarks_side[152].y * side_h])
-            face_height_pixels = abs(p_chin_bottom - p_forehead_top)
-
-            if face_height_pixels < 50: raise MeasurementError("Face detection unclear in side image.")
-
-            SIDE_CM_PER_PIXEL = AVG_FACE_HEIGHT / face_height_pixels
-            print(f"Side image scale: {SIDE_CM_PER_PIXEL:.4f} cm/pixel")
-
-            head_height_cm = bbox_height_pixels * SIDE_CM_PER_PIXEL * 1.15
-            head_length_cm = bbox_width_pixels * SIDE_CM_PER_PIXEL * 1.25
+            # Convert these pixel measurements to cm using the MASTER SCALE from the front view.
+            # Apply adjustments to extrapolate from the face to the full head.
+            head_length_cm = face_bbox_width_pixels * CM_PER_PIXEL * SIDE_LENGTH_ADJUSTMENT
+            head_height_cm = face_bbox_height_pixels * CM_PER_PIXEL * SIDE_HEIGHT_ADJUSTMENT
 
             p_ear_top = np.array([landmarks_side[10].y * side_h])
             p_ear_bottom = np.array([landmarks_side[175].y * side_h])
-            ear_height_G_cm = abs(p_ear_bottom - p_ear_top) * SIDE_CM_PER_PIXEL
+            ear_height_G_cm = abs(p_ear_bottom - p_ear_top) * CM_PER_PIXEL
             
-            print("SUCCESS: Side image processed directly.")
+            print("SUCCESS: Side image shape processed using master scale.")
 
-    # --- THIS IS THE CRITICAL FIX ---
     except Exception as e:
         print(f"WARNING: Side image processing failed ({e}). Using robust fallback estimation.")
-        # We use the ACCURATE head_width_cm from the front image to estimate.
+        # Fallback uses the ACCURATE head_width_cm to estimate.
         head_length_cm = head_width_cm * ESTIMATED_LENGTH_FROM_WIDTH_RATIO
         head_height_cm = head_width_cm * ESTIMATED_HEIGHT_FROM_WIDTH_RATIO
         ear_height_G_cm = head_height_cm * 0.30
-    # --- END OF FIX ---
 
     # =========================================================================
-    #  STEP 3: Derive all secondary measurements.
+    #  STEP 3: Derive all secondary measurements from the now-correct primary dimensions.
     # =========================================================================
     a = head_length_cm / 2
     b = head_width_cm / 2
