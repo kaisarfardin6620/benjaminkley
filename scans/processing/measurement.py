@@ -6,16 +6,12 @@ import numpy as np
 from typing import Dict
 
 # --- ANATOMICAL CONSTANTS (in Centimeters) ---
-AVG_FACE_WIDTH = 13.7  # Bizygomatic width (cheekbone to cheekbone). Our single source of truth for scaling.
+AVG_FACE_WIDTH = 13.7  # Bizygomatic width. Our single source of truth for scaling.
 
 # --- REALISTIC ADJUSTMENT & FALLBACK RATIOS ---
-# These factors account for the fact that landmarks don't cover the full head.
-# They are used to extrapolate from the landmark bounding box to the full cranium size.
-HEAD_WIDTH_ADJUSTMENT = 1.10  # From face width to full head width
-SIDE_HEIGHT_ADJUSTMENT = 1.35 # From face landmark height to full head height
-SIDE_LENGTH_ADJUSTMENT = 1.45 # From face landmark depth to full head depth
-
-# Fallback ratios (if side view fails completely)
+HEAD_WIDTH_ADJUSTMENT = 1.10
+SIDE_HEIGHT_ADJUSTMENT = 1.35
+SIDE_LENGTH_ADJUSTMENT = 1.45
 ESTIMATED_HEIGHT_FROM_WIDTH_RATIO = 1.35
 ESTIMATED_LENGTH_FROM_WIDTH_RATIO = 1.25
 
@@ -26,9 +22,6 @@ def get_measurements_from_images(front_image_path: str, side_image_path: str) ->
     print("--- Starting SINGLE-SOURCE-SCALE measurement process ---")
     mp_face_mesh = mp.solutions.face_mesh
     
-    # =========================================================================
-    #  STEP 1: Establish ONE TRUE SCALE from the front image. This is mandatory.
-    # =========================================================================
     try:
         front_image = cv2.imread(front_image_path)
         if front_image is None: raise MeasurementError("Could not read front image.")
@@ -46,7 +39,6 @@ def get_measurements_from_images(front_image_path: str, side_image_path: str) ->
             
             if face_width_pixels < 50: raise MeasurementError("Face detection unclear in front image.")
 
-            # THIS IS OUR ONE, RELIABLE SCALE. WE WILL USE IT FOR EVERYTHING.
             CM_PER_PIXEL = AVG_FACE_WIDTH / face_width_pixels
             print(f"MASTER SCALE established: {CM_PER_PIXEL:.4f} cm/pixel")
 
@@ -59,9 +51,6 @@ def get_measurements_from_images(front_image_path: str, side_image_path: str) ->
     except Exception as e:
         raise MeasurementError(f"CRITICAL FAILURE in front image processing: {e}")
 
-    # =========================================================================
-    #  STEP 2: Use the side image ONLY for shape (in pixels), then apply MASTER SCALE.
-    # =========================================================================
     try:
         side_image = cv2.imread(side_image_path)
         if side_image is None: raise MeasurementError("Could not read side image file.")
@@ -73,14 +62,11 @@ def get_measurements_from_images(front_image_path: str, side_image_path: str) ->
             landmarks_side = results_side.multi_face_landmarks[0].landmark
             side_h, side_w, _ = side_image.shape
             
-            # Get the bounding box of the FACE landmarks in the side view.
             all_x = [lm.x * side_w for lm in landmarks_side]
             all_y = [lm.y * side_h for lm in landmarks_side]
             face_bbox_width_pixels = max(all_x) - min(all_x)
             face_bbox_height_pixels = max(all_y) - min(all_y)
             
-            # Convert these pixel measurements to cm using the MASTER SCALE from the front view.
-            # Apply adjustments to extrapolate from the face to the full head.
             head_length_cm = face_bbox_width_pixels * CM_PER_PIXEL * SIDE_LENGTH_ADJUSTMENT
             head_height_cm = face_bbox_height_pixels * CM_PER_PIXEL * SIDE_HEIGHT_ADJUSTMENT
 
@@ -92,14 +78,10 @@ def get_measurements_from_images(front_image_path: str, side_image_path: str) ->
 
     except Exception as e:
         print(f"WARNING: Side image processing failed ({e}). Using robust fallback estimation.")
-        # Fallback uses the ACCURATE head_width_cm to estimate.
         head_length_cm = head_width_cm * ESTIMATED_LENGTH_FROM_WIDTH_RATIO
         head_height_cm = head_width_cm * ESTIMATED_HEIGHT_FROM_WIDTH_RATIO
         ear_height_G_cm = head_height_cm * 0.30
 
-    # =========================================================================
-    #  STEP 3: Derive all secondary measurements from the now-correct primary dimensions.
-    # =========================================================================
     a = head_length_cm / 2
     b = head_width_cm / 2
     head_circumference_A_cm = np.pi * (3 * (a + b) - np.sqrt((3 * a + b) * (a + 3 * b)))
@@ -116,21 +98,4 @@ def get_measurements_from_images(front_image_path: str, side_image_path: str) ->
     cheek_guard_clearance_L_cm = cheek_guard_height_M_cm * 0.3
 
     print("--- All measurements calculated successfully. ---")
-    return {
-        'head_width': head_width_cm,
-        'head_length': head_length_cm,
-        'head_height': head_height_cm,
-        'eye_to_eye': eye_to_eye_cm,
-        'ear_to_ear': ear_to_ear_cm,
-        'head_circumference_A': head_circumference_A_cm,
-        'forehead_to_back_B': forehead_to_back_B_cm,
-        'cross_measurement_C': cross_measurement_C_cm,
-        'under_chin_D': under_chin_D_cm,
-        'eyebrow_to_earlobe_E': eyebrow_to_earlobe_E_cm,
-        'eye_corner_to_ear_F': eye_corner_to_ear_F_cm,
-        'ear_height_G': ear_height_G_cm,
-        'ear_width_H': ear_width_H_cm,
-        'cheek_guard_height_M': cheek_guard_height_M_cm,
-        'cheek_guard_width_N': cheek_guard_width_N_cm,
-        'cheek_guard_clearance_L': cheek_guard_clearance_L_cm,
-    }
+    return { 'head_width': head_width_cm, 'head_length': head_length_cm, 'head_height': head_height_cm, 'eye_to_eye': eye_to_eye_cm, 'ear_to_ear': ear_to_ear_cm, 'head_circumference_A': head_circumference_A_cm, 'forehead_to_back_B': forehead_to_back_B_cm, 'cross_measurement_C': cross_measurement_C_cm, 'under_chin_D': under_chin_D_cm, 'eyebrow_to_earlobe_E': eyebrow_to_earlobe_E_cm, 'eye_corner_to_ear_F': eye_corner_to_ear_F_cm, 'ear_height_G': ear_height_G_cm, 'ear_width_H': ear_width_H_cm, 'cheek_guard_height_M': cheek_guard_height_M_cm, 'cheek_guard_width_N': cheek_guard_width_N_cm, 'cheek_guard_clearance_L': cheek_guard_clearance_L_cm }

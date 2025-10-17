@@ -3,16 +3,17 @@ FROM python:3.12-slim AS builder
 
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 
+# --- MODIFIED: Added libgomp1 for open3d dependency ---
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     libgl1 \
     libglib2.0-0 \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# THIS IS THE TYPO FIX: veno -> venv
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
@@ -25,14 +26,15 @@ FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 
+# --- MODIFIED: Added libgomp1 for open3d dependency ---
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
+    libgomp1 \
     gosu \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# This is the original fix for the home directory, which is still important
 RUN addgroup --system --gid 1000 app && adduser --system --uid 1000 --ingroup app --home /home/app app
 
 WORKDIR /app
