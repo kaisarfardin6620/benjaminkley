@@ -3,16 +3,15 @@ import mediapipe as mp
 import numpy as np
 from typing import Dict
 
-AVG_INTERPUPILLARY_DISTANCE = 6.3  
-AVG_BIZYGOMATIC_WIDTH = 13.7       
-AVG_BIGONIAL_WIDTH = 10.1          
-AVG_NASAL_HEIGHT = 5.2             
+AVG_BIZYGOMATIC_WIDTH = 13.7
+ESTIMATED_HEIGHT_FROM_WIDTH_RATIO = 1.35
+ESTIMATED_LENGTH_FROM_WIDTH_RATIO = 1.25
 
 class MeasurementError(Exception):
     pass
 
 def get_measurements_from_images(front_image_path: str, side_image_path: str) -> Dict[str, float]:
-    print("--- Starting STATISTICALLY ROBUST 2D measurement process ---")
+    print("--- Starting FINAL robust 2D measurement process ---")
     mp_face_mesh = mp.solutions.face_mesh
     
     try:
@@ -28,43 +27,27 @@ def get_measurements_from_images(front_image_path: str, side_image_path: str) ->
 
             landmarks = results_front.multi_face_landmarks[0].landmark
             img_h, img_w, _ = front_image.shape
-            p_left_pupil = np.array([landmarks[473].x * img_w, landmarks[473].y * img_h])
-            p_right_pupil = np.array([landmarks[468].x * img_w, landmarks[468].y * img_h])
-            ipd_pixels = np.linalg.norm(p_left_pupil - p_right_pupil)
             p_left_cheek = np.array([landmarks[234].x * img_w, landmarks[234].y * img_h])
             p_right_cheek = np.array([landmarks[454].x * img_w, landmarks[454].y * img_h])
             face_width_pixels = np.linalg.norm(p_left_cheek - p_right_cheek)
-            p_left_jaw = np.array([landmarks[172].x * img_w, landmarks[172].y * img_h])
-            p_right_jaw = np.array([landmarks[397].x * img_w, landmarks[397].y * img_h])
-            jaw_width_pixels = np.linalg.norm(p_left_jaw - p_right_jaw)
-            p_nasion = np.array([landmarks[168].x * img_w, landmarks[168].y * img_h]) 
-            p_subnasale = np.array([landmarks[2].x * img_w, landmarks[2].y * img_h]) 
-            nasal_height_pixels = np.linalg.norm(p_nasion - p_subnasale)
-            scale_from_ipd = AVG_INTERPUPILLARY_DISTANCE / ipd_pixels if ipd_pixels > 0 else 0
-            scale_from_face_width = AVG_BIZYGOMATIC_WIDTH / face_width_pixels if face_width_pixels > 0 else 0
-            scale_from_jaw_width = AVG_BIGONIAL_WIDTH / jaw_width_pixels if jaw_width_pixels > 0 else 0
-            scale_from_nasal_height = AVG_NASAL_HEIGHT / nasal_height_pixels if nasal_height_pixels > 0 else 0
-            valid_scales = [s for s in [scale_from_face_width, scale_from_ipd, scale_from_jaw_width, scale_from_nasal_height] if s > 0]
-            if not valid_scales:
-                raise MeasurementError("Could not get a valid scale from any facial feature.")
-            
-            CM_PER_PIXEL = np.average(
-                [s for s in [scale_from_face_width, scale_from_ipd] if s > 0], 
-                weights=[0.7, 0.3]
-            )
-
-            print(f"ROBUST scale established: {CM_PER_PIXEL:.4f} cm/pixel")
-
-            eye_to_eye_cm = ipd_pixels * CM_PER_PIXEL
-            head_width_cm = face_width_pixels * CM_PER_PIXEL * 1.1
+            if face_width_pixels < 50:
+                raise MeasurementError("Face detection is not clear enough to establish scale.")
+            CM_PER_PIXEL = AVG_BIZYGOMATIC_WIDTH / face_width_pixels
+            print(f"Robust scale established: {CM_PER_PIXEL:.4f} cm/pixel based on face width.")
+            head_width_cm = face_width_pixels * CM_PER_PIXEL * 1.1 
+            p_left_pupil = np.array([landmarks[473].x * img_w, landmarks[473].y * img_h])
+            p_right_pupil = np.array([landmarks[468].x * img_w, landmarks[468].y * img_h])
+            eye_to_eye_cm = np.linalg.norm(p_left_pupil - p_right_pupil) * CM_PER_PIXEL
 
     except Exception as e:
-        print(f"FATAL ERROR during FRONT image processing: {e}")
+        print(f"FATAL ERROR during front image processing: {e}")
         raise MeasurementError(f"Measurement failed on front image: {e}")
 
     try:
         side_image = cv2.imread(side_image_path)
-        if side_image is None: raise MeasurementError("Could not read side image.")
+        if side_image is None: 
+            raise MeasurementError("Could not read side image file.")
+
         side_img_h, side_img_w, _ = side_image.shape
 
         with mp_face_mesh.FaceMesh(static_image_mode=True, max_num_faces=1, min_detection_confidence=0.5) as face_mesh:
@@ -73,25 +56,22 @@ def get_measurements_from_images(front_image_path: str, side_image_path: str) ->
                 raise MeasurementError("Could not detect a face in the side-facing image.")
 
             landmarks_side = results_side.multi_face_landmarks[0].landmark
+            p_forehead = np.array([landmarks_side[127].x * side_img_w])
+            p_rear_cheek = np.array([landmarks_side[234].x * side_img_w])
+            head_length_cm = (p_forehead - p_rear_cheek) * CM_PER_PIXEL * 1.45 
+            p_forehead_top = np.array([landmarks_side[10].y * side_img_h])
+            p_chin_bottom = np.array([landmarks_side[152].y * side_img_h])
+            head_height_cm = (p_chin_bottom - p_forehead_top) * CM_PER_PIXEL * 1.2
+            p_ear_top = np.array([landmarks_side[10].y * side_img_h])
+            p_ear_bottom = np.array([landmarks_side[175].y * side_img_h])
+            ear_height_G_cm = np.linalg.norm(p_ear_top - p_ear_bottom) * CM_PER_PIXEL
             
-            nose_tip_x = landmarks_side[1].x * side_img_w
-            rear_head_x = min(lm.x for lm in landmarks_side) * side_img_w
-            head_length_cm = (nose_tip_x - rear_head_x) * CM_PER_PIXEL * 1.15
-
-            top_head_y = min(lm.y for lm in landmarks_side) * side_img_h
-            chin_bottom_y = landmarks_side[152].y * side_img_h
-            head_height_cm = (chin_bottom_y - top_head_y) * CM_PER_PIXEL * 1.2
-            
-            ear_top = np.array([landmarks_side[10].y * side_img_h])
-            ear_bottom = np.array([landmarks_side[175].y * side_img_h])
-            ear_height_G_cm = np.linalg.norm(ear_top - ear_bottom) * CM_PER_PIXEL
-            
-            print("Side image processed successfully.")
+            print("Side image processed successfully. Using direct measurements for length and height.")
 
     except Exception as e:
-        print(f"WARNING: Could not process side image ({e}). Using anatomical ratios for estimation.")
-        head_length_cm = head_width_cm * 1.25
-        head_height_cm = head_width_cm * 1.35
+        print(f"WARNING: Could not process side image ({e}). Using CONSERVATIVE anatomical ratios for estimation.")
+        head_length_cm = head_width_cm * ESTIMATED_LENGTH_FROM_WIDTH_RATIO
+        head_height_cm = head_width_cm * ESTIMATED_HEIGHT_FROM_WIDTH_RATIO
         ear_height_G_cm = head_height_cm * 0.30
 
     ear_to_ear_cm = head_width_cm * 1.4
