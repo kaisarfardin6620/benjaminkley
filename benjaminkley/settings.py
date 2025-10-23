@@ -199,3 +199,5 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
 
 USE_X_FORWARDED_HOST = True
+
+KEENTOOLS_API_BASE_URL = "https://br7ls2mdjpzkmchaeuwlp6hf54ozlmfq.lambda-url.us-east-1.on.aws/"

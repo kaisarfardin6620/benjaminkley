@@ -1,5 +1,4 @@
 services:
-  # NEW: Redis service for Celery message brokering
   redis:
     image: "redis:7-alpine"
     container_name: benjaminkley-redis
@@ -11,12 +10,9 @@ services:
       timeout: 5s
       retries: 5
 
-  # UPDATED: Django App now depends on Redis
   app:
     build: .
     container_name: benjaminkley-app
-    ports:
-      - "8000:8000"
     volumes:
       - type: bind
         source: .
@@ -40,7 +36,6 @@ services:
       - app-network
     dns:
       - 8.8.8.8
-    # MODIFIED: Changed command to be explicit
     command: ["/app/docker-entrypoint.sh", "web"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/admin/login/"]
@@ -48,12 +43,10 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
-    # ADDED: Depends on Redis being healthy before starting
     depends_on:
       redis:
         condition: service_healthy
 
-  # NEW: Celery worker service for background tasks
   celery-worker:
     build: .
     container_name: benjaminkley-celery-worker
@@ -72,14 +65,24 @@ services:
       - MPLCONFIGDIR=/app/.cache/matplotlib
     networks:
       - app-network
-    # ADDED: Depends on both Redis and the main app code/migrations
     depends_on:
       redis:
         condition: service_healthy
       app:
-        condition: service_started # or service_healthy if you have a separate db wait
+        condition: service_started
 
-  # UNCHANGED: Nginx service
+  dashboard-app:
+    image: node:18-alpine
+    container_name: benjaminkley-dashboard
+    working_dir: /app
+    volumes:
+      - ./path/to/your/dashboard:/app
+    command: npm start
+    networks:
+      - app-network
+    ports:
+      - "3000:3000"
+
   nginx:
     image: nginx:1.25
     container_name: benjaminkley-nginx
@@ -101,6 +104,8 @@ services:
     depends_on:
       app:
         condition: service_healthy
+      dashboard-app:
+        condition: service_started
     networks:
       - app-network
 

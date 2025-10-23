@@ -27,19 +27,16 @@ class Scan(models.Model):
     ear_to_ear = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     head_width = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     head_height = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
-    
     head_length = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
 
     head_circumference_A = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     forehead_to_back_B = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     cross_measurement_C = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     under_chin_D = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
-
     eyebrow_to_earlobe_E = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     eye_corner_to_ear_F = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     ear_height_G = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     ear_width_H = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
-
     cheek_guard_clearance_L = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     cheek_guard_height_M = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     cheek_guard_width_N = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
