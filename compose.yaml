@@ -1,6 +1,5 @@
-# docker-compose.yml
-
 services:
+  # Redis service for Celery message brokering
   redis:
     image: "redis:7-alpine"
     container_name: benjaminkley-redis
@@ -12,9 +11,12 @@ services:
       timeout: 5s
       retries: 5
 
+  # Django App
   app:
     build: .
     container_name: benjaminkley-app
+    ports:
+      - "8000:8000"
     volumes:
       - type: bind
         source: .
@@ -49,6 +51,7 @@ services:
       redis:
         condition: service_healthy
 
+  # Celery worker service for background tasks
   celery-worker:
     build: .
     container_name: benjaminkley-celery-worker
@@ -73,6 +76,7 @@ services:
       app:
         condition: service_started
 
+  # Nginx service
   nginx:
     image: nginx:1.25
     container_name: benjaminkley-nginx
