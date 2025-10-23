@@ -1,3 +1,5 @@
+# docker-compose.yml
+
 services:
   redis:
     image: "redis:7-alpine"
@@ -71,18 +73,6 @@ services:
       app:
         condition: service_started
 
-  dashboard-app:
-    image: node:18-alpine
-    container_name: benjaminkley-dashboard
-    working_dir: /app
-    volumes:
-      - ./path/to/your/dashboard:/app
-    command: npm start
-    networks:
-      - app-network
-    ports:
-      - "3000:3000"
-
   nginx:
     image: nginx:1.25
     container_name: benjaminkley-nginx
@@ -104,8 +94,6 @@ services:
     depends_on:
       app:
         condition: service_healthy
-      dashboard-app:
-        condition: service_started
     networks:
       - app-network
 
