@@ -40,5 +40,5 @@ def process_scan_and_save(scan_id: str):
         
         if scan.status == Scan.Status.COMPLETED:
             create_and_send_notification(user=scan.user, title="Scan Completed", message=f"Your scan '{scan.name}' has been successfully processed.")
-        elif scan.status == Scan.STatus.FAILED:
+        elif scan.status == Scan.Status.FAILED:
             create_and_send_notification(user=scan.user, title="Scan Failed", message=f"There was an error processing your scan '{scan.name}'.")
