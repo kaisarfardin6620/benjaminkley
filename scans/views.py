@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
+from django.db import transaction # Import transaction
 from django.http import FileResponse
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Scan
@@ -29,14 +30,17 @@ class ScanViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
+    @transaction.atomic # BEST PRACTICE FIX: Ensure Scan creation is atomic before task is deferred
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         scan = serializer.instance
         
-        process_scan_and_save.delay(str(scan.id))
+        # Defer task until after the transaction is committed
+        transaction.on_commit(lambda: process_scan_and_save.delay(str(scan.id)))
         
+        # NOTE: The response structure is preserved as requested
         detail_serializer = ScanDetailSerializer(scan, context={'request': request})
         
         response_data = {

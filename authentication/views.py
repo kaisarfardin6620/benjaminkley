@@ -1,9 +1,9 @@
-import profile
 from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
 from django.contrib.auth.models import User
 from django.contrib.auth.hashers import check_password
+from django.db import transaction
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -11,6 +11,7 @@ from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from .models import AuthToken, UserProfile, PasswordHistory
 from .serializers import (
     SignupSerializer, OTPVerificationSerializer, ChangePasswordSerializer,
@@ -20,6 +21,7 @@ from .serializers import (
 import random
 from dashboard.models import AdminNotification
 from notifications.utils import create_and_send_notification
+import profile
 
 def generate_otp():
     return str(random.randint(100000, 999999))
@@ -40,6 +42,9 @@ def send_otp_email(user, otp, purpose="account verification"):
 class UserSignupAPIView(APIView):
     permission_classes = [AllowAny]
     parser_classes = [MultiPartParser, FormParser]
+    throttle_classes = [AnonRateThrottle]
+
+    @transaction.atomic
     def post(self, request):
         serializer = SignupSerializer(data=request.data)
         if not serializer.is_valid():
@@ -55,12 +60,15 @@ class UserSignupAPIView(APIView):
 
 class VerifySignupOTPView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [AnonRateThrottle]
+
+    @transaction.atomic
     def post(self, request):
         serializer = OTPVerificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         otp = serializer.validated_data['otp']
         try:
-            token = AuthToken.objects.get(otp_code=otp, token_type='signup', is_used=False, expires_at__gt=timezone.now())
+            token = AuthToken.objects.select_for_update().get(otp_code=otp, token_type='signup', is_used=False, expires_at__gt=timezone.now())
         except AuthToken.DoesNotExist:
             return Response({'error': 'Invalid or expired OTP.'}, status=status.HTTP_400_BAD_REQUEST)
         user = token.user
@@ -96,6 +104,9 @@ class AcceptTermsAPIView(APIView):
 
 class ResendSignupOTPView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [AnonRateThrottle]
+
+    @transaction.atomic
     def post(self, request):
         serializer = ResendVerificationSerializer(data=request.data)
         if serializer.is_valid():
@@ -106,7 +117,9 @@ class ResendSignupOTPView(APIView):
                     return Response({'error': 'This account is already active.'}, status=status.HTTP_400_BAD_REQUEST)
                 if user.profile.status != 'UNVERIFIED':
                     return Response({'error': 'This account has already been verified and is pending approval.'}, status=status.HTTP_400_BAD_REQUEST)
+                
                 AuthToken.objects.filter(user=user, token_type='signup', is_used=False).update(is_used=True)
+                
                 otp = generate_otp()
                 AuthToken.objects.create(user=user, otp_code=otp, token_type='signup')
                 send_otp_email(user, otp, purpose="account verification")
@@ -117,11 +130,13 @@ class ResendSignupOTPView(APIView):
 class MyTokenObtainPairView(APIView):
     permission_classes = [AllowAny]
     serializer_class = MyTokenObtainPairSerializer
+    throttle_classes = [AnonRateThrottle]
 
     def post(self, request, *args, **kwargs):
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
         return Response(serializer.validated_data, status=status.HTTP_200_OK)
+
 class UserLogoutAPIView(APIView):
     permission_classes = [IsAuthenticated]
     def post(self, request):
@@ -165,8 +180,11 @@ class UpdateProfileAPIView(APIView):
             )
             return Response(ProfileSerializer(profile, context={'request': request}).data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 class ChangePasswordAPIView(APIView):
     permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
     def post(self, request):
         serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
@@ -185,6 +203,9 @@ class ChangePasswordAPIView(APIView):
 
 class PasswordResetRequestOTPView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [AnonRateThrottle]
+
+    @transaction.atomic
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
         if serializer.is_valid():
@@ -201,6 +222,9 @@ class PasswordResetRequestOTPView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 class ResendPasswordResetOTPView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [AnonRateThrottle]
+
+    @transaction.atomic
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
         if serializer.is_valid():
@@ -218,12 +242,15 @@ class ResendPasswordResetOTPView(APIView):
 
 class VerifyPasswordResetOTPView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [AnonRateThrottle]
+
+    @transaction.atomic 
     def post(self, request):
         serializer = PasswordResetVerifyOTPSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         otp = serializer.validated_data['otp']
         try:
-            token = AuthToken.objects.get(
+            token = AuthToken.objects.select_for_update().get(
                 otp_code=otp, token_type='password_reset_otp',
                 is_used=False, expires_at__gt=timezone.now()
             )
@@ -239,13 +266,16 @@ class VerifyPasswordResetOTPView(APIView):
 
 class SetNewPasswordView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [AnonRateThrottle] 
+
+    @transaction.atomic 
     def post(self, request):
         serializer = SetNewPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         ticket = serializer.validated_data['password_change_ticket']
         new_password = serializer.validated_data['new_password']
         try:
-            verified_token = AuthToken.objects.get(
+            verified_token = AuthToken.objects.select_for_update().get(
                 token=ticket, token_type='password_change_ticket',
                 is_used=False, expires_at__gt=timezone.now()
             )
@@ -264,6 +294,8 @@ class SetNewPasswordView(APIView):
 
 class DeleteUserAccountAPIView(APIView):
     permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
     def delete(self, request, *args, **kwargs):
         serializer = DeleteAccountSerializer(
             data=request.data,

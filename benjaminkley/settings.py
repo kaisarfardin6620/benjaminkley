@@ -120,7 +120,10 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.AnonRateThrottle',
         'rest_framework.throttling.UserRateThrottle'
     ],
-    'DEFAULT_THROTTLE_RATES': {'anon': '100/day', 'user': '1000/day'},
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/day', 
+        'user': '1000/day',
+    },
     'DEFAULT_RENDERER_CLASSES': [
         'core.renderers.CustomJSONRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',
@@ -145,12 +148,12 @@ SIMPLE_JWT = {
 }
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
+EMAIL_HOST = os.getenv('EMAIL_HOST')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', 465))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true'
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
-DEFAULT_FROM_EMAIL = os.getenv('EMAIL_HOST_USER')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 CORS_ALLOWED_ORIGINS = CSRF_TRUSTED_ORIGINS
 CORS_ALLOW_CREDENTIALS = True
 
@@ -191,13 +194,14 @@ LOGGING = {
     },
 }
 
-CELERY_BROKER_URL = 'redis://redis:6379/0'
-CELERY_RESULT_BACKEND = 'redis://redis:6379/0'
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://redis:6379/0')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://redis:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
 
-USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_HOST = True 
 
-KEENTOOLS_API_BASE_URL = "https://br7ls2mdjpzkmchaeuwlp6hf54ozlmfq.lambda-url.us-east-1.on.aws/"
+KEENTOOLS_SECRET_KEY = os.getenv('KEENTOOLS_SECRET_KEY')
+KEENTOOLS_API_BASE_URL = os.getenv('KEENTOOLS_API_BASE_URL', "https://br7ls2mdjpzkmchaeuwlp6hf54ozlmfq.lambda-url.us-east-1.on.aws/")

@@ -8,19 +8,10 @@ class CustomDashboardPagination(PageNumberPagination):
     max_page_size = 100
 
     def get_paginated_response(self, data):
-        incorrect_base = self.request.build_absolute_uri('/')[:-1]
         
-        next_link = self.get_next_link()
-        previous_link = self.get_previous_link()
-
-        if next_link:
-            next_link = next_link.replace(incorrect_base, settings.SERVER_BASE_URL)
-        if previous_link:
-            previous_link = previous_link.replace(incorrect_base, settings.SERVER_BASE_URL)
-
         return Response({
             'count': self.page.paginator.count,
-            'next': next_link,
-            'previous': previous_link,
+            'next': self.get_next_link(),
+            'previous': self.get_previous_link(),
             'results': data
         })
