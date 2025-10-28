@@ -99,6 +99,7 @@ class AdminNotificationSerializer(serializers.ModelSerializer):
         model = AdminNotification
         fields = ('id', 'notification_type', 'title', 'message', 'is_read', 'created_at')
 class SiteContentSerializer(serializers.ModelSerializer):
+    slug = serializers.SlugField(read_only=True)
     class Meta:
         model = SiteContent
         fields = '__all__'
