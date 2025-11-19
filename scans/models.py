@@ -14,10 +14,7 @@ class Scan(models.Model):
     name = models.CharField(max_length=255)
     notes = models.TextField(blank=True, null=True)
     custom_field = models.CharField(max_length=255, blank=True, null=True)
-    image_front = models.ImageField(upload_to='scans/inputs/')
-    image_back = models.ImageField(upload_to='scans/inputs/')
-    image_left = models.ImageField(upload_to='scans/inputs/')
-    image_right = models.ImageField(upload_to='scans/inputs/')
+    image_front = models.ImageField(upload_to='scans/inputs/') 
 
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PROCESSING)
     failure_reason = models.TextField(null=True, blank=True)
@@ -28,7 +25,6 @@ class Scan(models.Model):
     head_width = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     head_height = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     head_length = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
-
     head_circumference_A = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     forehead_to_back_B = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     cross_measurement_C = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
@@ -48,4 +44,9 @@ class Scan(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"Scan '{self.name}' for {self.user.username}"
+        return f"Scan '{self.name}'"
+
+class ScanImage(models.Model):
+    scan = models.ForeignKey(Scan, related_name='extra_images', on_delete=models.CASCADE)
+    image = models.ImageField(upload_to='scans/inputs/')
+    created_at = models.DateTimeField(auto_now_add=True)

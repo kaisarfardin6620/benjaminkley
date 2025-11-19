@@ -1,27 +1,46 @@
 from rest_framework import serializers
-from .models import Scan
+from .models import Scan, ScanImage
 from django.conf import settings
 from django.urls import reverse
 from core.utils import get_full_media_url
 from urllib.parse import urljoin
 
 class ScanCreateSerializer(serializers.ModelSerializer):
+    image_front = serializers.ImageField(required=True)
+    
+    extra_images = serializers.ListField(
+        child=serializers.ImageField(max_length=1000000, allow_empty_file=False, use_url=False),
+        write_only=True,
+        required=True
+    )
+
     class Meta:
         model = Scan
-        fields = (
-            'name', 
-            'notes', 
-            'custom_field', 
-            'image_front', 
-            'image_back', 
-            'image_left', 
-            'image_right'
-        )
+        fields = ('name', 'notes', 'custom_field', 'image_front', 'extra_images')
 
+    def validate(self, attrs):
+        front = attrs.get('image_front')
+        extras = attrs.get('extra_images', [])
+        
+        total_images = 1 + len(extras)
+        
+        if total_images < 5:
+            raise serializers.ValidationError(f"You uploaded {total_images} images. Minimum 5 required.")
+        return attrs
+
+    def create(self, validated_data):
+        extra_images_data = validated_data.pop('extra_images')
+        
+        scan = Scan.objects.create(**validated_data)
+        
+        scan_images = [ScanImage(scan=scan, image=img) for img in extra_images_data]
+        ScanImage.objects.bulk_create(scan_images)
+        
+        return scan
 
 class ScanDetailSerializer(serializers.ModelSerializer):
     scan_id = serializers.UUIDField(source='id', read_only=True)
-    Name = serializers.SerializerMethodField()
+    Name = serializers.CharField(source='name', default="N/A")
     Date_of_Scan = serializers.DateTimeField(source='created_at', format="%B %d, %Y", read_only=True)
     status = serializers.CharField()
     
@@ -39,23 +58,11 @@ class ScanDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Scan
         fields = (
-            'scan_id',
-            'Name',
-            'Date_of_Scan',
-            'status',
-            'scan_images',
-            'reconstructed_3d_head',
-            'pdf_report_url',
-            'Head_Width',
-            'Head_Length',
-            'Ear_to_Ear',
-            'Eye_to_Eye',
-            'Notes',
-            'Custom_Fit',
+            'scan_id', 'Name', 'Date_of_Scan', 'status',
+            'scan_images', 'reconstructed_3d_head', 'pdf_report_url',
+            'Head_Width', 'Head_Length', 'Ear_to_Ear', 'Eye_to_Eye',
+            'Notes', 'Custom_Fit'
         )
-        
-    def get_Name(self, obj):
-        return obj.name if obj.name else "N/A"
 
     def get_scan_images(self, obj):
         request = self.context.get('request')
@@ -63,12 +70,12 @@ class ScanDetailSerializer(serializers.ModelSerializer):
         front_url = get_full_media_url(request, obj.image_front)
         if front_url:
             images.append(front_url)
-        back_url = get_full_media_url(request, obj.image_back)
-        if back_url: images.append(back_url)
-        left_url = get_full_media_url(request, obj.image_left)
-        if left_url: images.append(left_url)
-        right_url = get_full_media_url(request, obj.image_right)
-        if right_url: images.append(right_url)
+            
+        for extra in obj.extra_images.all():
+            url = get_full_media_url(request, extra.image)
+            if url:
+                images.append(url)
+        
         return {"thumbnail": front_url, "all_images": images}
 
     def get_reconstructed_3d_head(self, obj):

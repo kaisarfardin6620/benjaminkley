@@ -14,7 +14,7 @@ urlpatterns = [
     path('api/privacy-policy/', PrivacyPolicyAPIView.as_view(), name='privacy-policy'),
     path('api/terms-and-conditions/', TermsAndConditionsAPIView.as_view(), name='terms-and-conditions'),
     path('api/notifications/', include('notifications.urls')),
-    re_path(r'^media/scans/outputs/(?P<filename>[^/]+\.obj)$', serve_obj_file, name='serve-obj-file'),
+    re_path(r'^media/scans/outputs/(?P<filename>[^/]+\.(obj|glb))$', serve_obj_file, name='serve-obj-file'),
 ]
 
 if settings.DEBUG:

@@ -3,176 +3,225 @@ import time
 import os
 import tempfile
 import trimesh
+import traceback
+import logging
 from django.conf import settings
 from django.core.files import File
-from ..mesh_measurements import perform_all_measurements
-import traceback
+from urllib.parse import urljoin
+
+logger = logging.getLogger(__name__)
 
 class PipelineError(Exception):
     pass
 
 def _get_api_headers(api_key):
-    return {'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'}
+    return {'Authorization': f'Bearer {api_key}'}
 
 def _make_url(path: str) -> str:
-    base = settings.KEENTOOLS_API_BASE_URL.rstrip('/') + '/'
-    return os.path.join(base, path)
+    base = getattr(settings, 'KEENTOOLS_API_BASE_URL', '').strip()
+    if not base:
+        raise PipelineError("KEENTOOLS_API_BASE_URL is not set.")
+    
+    if '/avatar' not in base:
+        base = base.rstrip('/') + '/avatar/'
+    elif base.endswith('/avatar'):
+        base += '/'
+    if not base.endswith('/'):
+        base += '/'
+
+    return urljoin(base, path)
 
 def _init_avatar(api_key, img_count):
-    url = _make_url("avatar/init") 
+    url = _make_url("init") 
     headers = _get_api_headers(api_key)
+    headers['Content-Type'] = 'application/json'
     payload = {"img_count": img_count}
 
-    print(f"--- Step 1: POST to {url} ---")
-    response = requests.post(url, headers=headers, json=payload, timeout=15)
-
-    if response.status_code != 200:
-        raise PipelineError(f"Init failed: {response.status_code} - {response.text}")
+    logger.info(f"--- Step 1: Init for {img_count} images ---")
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        response.raise_for_status()
+    except Exception as e:
+        raise PipelineError(f"Init failed: {e}")
     
     data = response.json()
-    avatar_id = data.get("avatar_id")
-    presigned_urls = data.get("img_urls")
-    
-    if not avatar_id or len(presigned_urls) != img_count:
-        raise PipelineError(f"Invalid init response. Expected {img_count} URLs, got {len(presigned_urls)}.")
-    
-    print(f"--- Avatar initialized. ID: {avatar_id} ---")
-    return avatar_id, presigned_urls
+    return data.get("avatar_id"), data.get("img_urls")
 
 def _upload_photo(image_path, upload_url):
-    print(f"--- Step 2: PUT to S3 URL for {os.path.basename(image_path)} ---")
+    logger.info(f"--- Step 2: Uploading {os.path.basename(image_path)} ---")
     if not os.path.exists(image_path):
-        raise PipelineError(f"Local image file not found at: {image_path}")
+        raise PipelineError(f"File not found: {image_path}")
 
     with open(image_path, 'rb') as f:
         img_data = f.read()
     
-    res = requests.put(upload_url, data=img_data, headers={"Content-Type": "image/jpeg"}, timeout=30) 
-    
-    if res.status_code not in [200, 201]: 
-        raise PipelineError(f"S3 upload failed: {res.status_code} - {res.text}")
-    print("--- Photo uploaded successfully. ---")
+    try:
+        res = requests.put(upload_url, data=img_data, headers={"Content-Type": "image/jpeg"}, timeout=120)
+        if res.status_code not in [200, 201]: 
+            raise PipelineError(f"S3 upload failed: {res.status_code}")
+    except Exception as e:
+        raise PipelineError(f"Upload failed: {e}")
 
-def _start_reconstruction(api_key, avatar_id):
-    url = _make_url(f"avatar/{avatar_id}/create")
+def _start_reconstruction(api_key, avatar_id, img_count):
+    url = _make_url(f"{avatar_id}/create")
     headers = _get_api_headers(api_key)
+    headers['Content-Type'] = 'application/json'
     
     payload = {
-        "focal_length_type": "estimate_common", 
+        "focal_length_type": "manual",
+        "focal_length_values": [28.0] * img_count, 
         "expressions_enabled": False
     }
 
-    print(f"--- Step 3: POST to {url} with payload ---")
-    response = requests.post(url, headers=headers, json=payload, timeout=15)
-    
+    logger.info(f"--- Step 3: Start Reconstruction ---")
+    response = requests.post(url, headers=headers, json=payload, timeout=30)
     if response.status_code != 200: 
-        raise PipelineError(f"Start reconstruction failed: {response.status_code} - {response.text}")
-    print("--- Reconstruction started. ---")
+        raise PipelineError(f"Start failed: {response.status_code} - {response.text}")
 
-def _poll_for_completion(api_key, avatar_id, timeout=300):
-    status_url = _make_url(f"avatar/{avatar_id}/get_status")
+def _poll_for_completion(api_key, avatar_id, timeout=600):
+    status_url = _make_url(f"{avatar_id}/get_status")
     headers = _get_api_headers(api_key)
+    headers['Content-Type'] = 'application/json'
     start_time = time.time()
-    print(f"--- Step 4: Polling {status_url} ---")
     
+    logger.info(f"--- Step 4: Polling Status ---")
     while time.time() - start_time < timeout:
-        response = requests.get(status_url, headers=headers, timeout=15)
-        if response.status_code != 200: 
-            raise PipelineError(f"Polling failed: {response.status_code} - {response.text}")
-        
-        data = response.json()
-        status = data.get('status')
-        print(f"Job status: {status}")
-        
-        if status == 'completed':
-            print("--- Job completed. ---")
-            return
-        elif status == 'failed':
-            error_msg = data.get('data', {}).get('error', 'Unknown error during reconstruction.')
-            raise PipelineError(f"KeenTools job failed: {error_msg}")
+        try:
+            response = requests.get(status_url, headers=headers, timeout=15)
+            data = response.json()
+            status = data.get('status', '').lower()
             
-        time.sleep(10)
-        
+            if status == 'completed':
+                logger.info("--- Completed ---")
+                return
+            elif status == 'failed':
+                raise PipelineError(f"Job failed: {data.get('data')}")
+            
+            time.sleep(6)
+        except Exception:
+            time.sleep(6)
     raise PipelineError("Job timed out.")
 
-def _measure_mesh(scan):
-    if not scan.processed_3d_model: raise PipelineError("Model not found for measurement.")
-    
-    scan.processed_3d_model.seek(0) 
-    
-    mesh_path = None
-    
-    with tempfile.NamedTemporaryFile(suffix=".obj", delete=False) as tmp:
-        for chunk in scan.processed_3d_model.chunks():
-            tmp.write(chunk)
-        mesh_path = tmp.name
-        tmp.close()
-    try:
-        mesh = trimesh.load(mesh_path, file_type='obj', force='mesh')
-        from ..mesh_measurements import perform_all_measurements
-        return perform_all_measurements(mesh)
-    finally:
-        if mesh_path and os.path.exists(mesh_path):
-            os.remove(mesh_path)
-
-def _download_and_save_model(scan, api_key, avatar_id):
-    model_url = _make_url(f'avatar/{avatar_id}/get_3d_model/single_head') 
+def _download_obj_for_math(api_key, avatar_id):
+    url = _make_url(f"{avatar_id}/get_3d_model/single_head")
     headers = _get_api_headers(api_key)
-    print(f"--- Step 5: GET from {model_url} ---")
-    response = requests.get(model_url, headers=headers, stream=True, timeout=60)
-    if response.status_code != 200: raise PipelineError(f"Download failed: {response.status_code} - {response.text}")
+    logger.info("--- Downloading OBJ for Measurements ---")
     
-    temp_file_path = None 
+    for i in range(50):
+        response = requests.get(url, headers=headers, allow_redirects=False, timeout=60)
+        
+        if response.status_code == 302:
+            file_res = requests.get(response.headers["Location"], timeout=180)
+            temp = tempfile.NamedTemporaryFile(delete=False, suffix=".obj")
+            temp.write(file_res.content)
+            temp.close()
+            return temp.name
+            
+        elif response.status_code == 200:
+            temp = tempfile.NamedTemporaryFile(delete=False, suffix=".obj")
+            temp.write(response.content)
+            temp.close()
+            return temp.name
+            
+        elif response.status_code in (202, 425):
+            time.sleep(5)
+            continue
+        else:
+            raise PipelineError(f"OBJ Download failed: {response.status_code}")
+    raise PipelineError("OBJ Download timeout")
+
+def _download_glb_for_display(scan, api_key, avatar_id):
+    url = _make_url(f"{avatar_id}/get_3d_model/neutral_with_blendshapes_glb")
+    headers = _get_api_headers(api_key)
+    params = {"texture": "true"}
     
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".obj") as temp_file:
-        for chunk in response.iter_content(chunk_size=8192): temp_file.write(chunk)
-        temp_file_path = temp_file.name
+    logger.info("--- Downloading Textured GLB for Display ---")
     
-    with open(temp_file_path, 'rb') as f:
-        scan.processed_3d_model.save(f"{scan.id}_reconstructed.obj", File(f), save=False)
-    
-    print("--- Final model saved to FileField. ---")
-    return temp_file_path
+    for i in range(50):
+        response = requests.get(url, headers=headers, params=params, allow_redirects=False, timeout=60)
+        
+        if response.status_code == 302:
+            logger.info("GLB Ready. Downloading...")
+            final_url = response.headers["Location"]
+            file_res = requests.get(final_url, timeout=180)
+            file_res.raise_for_status()
+            
+            temp_path = None
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".glb") as temp_file:
+                temp_file.write(file_res.content)
+                temp_path = temp_file.name
+            
+            with open(temp_path, 'rb') as f:
+                scan.processed_3d_model.save(f"{scan.id}_model.glb", File(f), save=True)
+            
+            os.remove(temp_path)
+            return
+
+        elif response.status_code in (202, 425):
+            logger.info(f"GLB Generating... ({i+1}/50)")
+            time.sleep(6)
+            continue
+        
+        else:
+            if response.status_code == 200:
+                temp_path = None
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".glb") as temp_file:
+                    temp_file.write(response.content)
+                    temp_path = temp_file.name
+                
+                with open(temp_path, 'rb') as f:
+                    scan.processed_3d_model.save(f"{scan.id}_model.glb", File(f), save=True)
+                
+                os.remove(temp_path)
+                return
+
+            logger.error(f"GLB Error: {response.status_code} - {response.text}")
+            raise PipelineError(f"GLB Download failed: {response.status_code}")
+
+    raise PipelineError("GLB Download timeout")
+
 
 def run_full_scan_pipeline(scan_id):
     from scans.models import Scan
     scan = Scan.objects.get(id=scan_id)
-    
     api_key = getattr(settings, 'KEENTOOLS_SECRET_KEY', None)
-    if not api_key: raise PipelineError("KEENTOOLS_SECRET_KEY is not set in Django settings.")
+    if not api_key: raise PipelineError("Key missing")
+
+    image_paths = []
+    if scan.image_front: image_paths.append(scan.image_front.path)
+    for img in scan.extra_images.all(): image_paths.append(img.image.path)
     
-    image_paths = [
-        scan.image_front.path,
-        scan.image_back.path,
-        scan.image_left.path,
-        scan.image_right.path,
-    ]
-    
-    temp_file_path = None 
+    if len(image_paths) < 1: raise PipelineError("No images")
+
+    obj_temp_path = None 
 
     try:
-        image_count = len(image_paths)
-        avatar_id, upload_urls = _init_avatar(api_key, image_count)
+        count = len(image_paths)
         
-        for path, url in zip(image_paths, upload_urls):
+        avatar_id, urls = _init_avatar(api_key, count)
+        
+        for path, url in zip(image_paths, urls):
             _upload_photo(path, url)
             
-        _start_reconstruction(api_key, avatar_id)
+        _start_reconstruction(api_key, avatar_id, count)
+        
         _poll_for_completion(api_key, avatar_id)
         
-        temp_file_path = _download_and_save_model(scan, api_key, avatar_id)
-
-        mesh = trimesh.load(temp_file_path, file_type='obj', force='mesh')
+        obj_temp_path = _download_obj_for_math(api_key, avatar_id)
+        
+        logger.info("Measuring OBJ...")
+        mesh = trimesh.load(obj_temp_path, file_type='obj', force='mesh')
         from ..mesh_measurements import perform_all_measurements
         measurements = perform_all_measurements(mesh)
         
-        return {"measurements": measurements}
+        _download_glb_for_display(scan, api_key, avatar_id)
         
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
+        return {"measurements": measurements}
 
-        if temp_file_path and os.path.exists(temp_file_path):
-            os.remove(temp_file_path)
-            
-        raise PipelineError(f"Pipeline execution failed: {e}")
+    except Exception as e:
+        logger.error(traceback.format_exc())
+        raise PipelineError(str(e))
+        
+    finally:
+        if obj_temp_path and os.path.exists(obj_temp_path):
+            os.remove(obj_temp_path)

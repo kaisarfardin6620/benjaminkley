@@ -10,35 +10,50 @@ from scans.models import Scan
 logger = logging.getLogger(__name__)
 
 @shared_task
-@transaction.atomic
 def process_scan_and_save(scan_id: str):
     logger.info(f"Starting professional reconstruction for scan {scan_id}")
-    scan = Scan.objects.get(id=scan_id)
+    
     try:
+        scan = Scan.objects.get(id=scan_id)
+        
         AdminNotification.objects.create(
             notification_type=AdminNotification.NotificationType.NEW_SCAN,
             message=f"User {scan.user.get_full_name()} submitted new scan: '{scan.name}'."
         )
         
         results = run_full_scan_pipeline(scan_id)
-        measurements = results.get('measurements', {})
         
+        scan.refresh_from_db()
+        
+        measurements = results.get('measurements', {})
         for key, value in measurements.items():
             if hasattr(scan, key) and value is not None:
                 setattr(scan, key, Decimal(f"{value:.2f}"))
         
         scan.status = Scan.Status.COMPLETED
+        scan.save() 
+        
         logger.info(f"Completed processing for scan {scan_id}")
+        
+        create_and_send_notification(
+            user=scan.user, 
+            title="Scan Completed", 
+            message=f"Your scan '{scan.name}' has been successfully processed."
+        )
 
     except (PipelineError, Exception) as e:
-        scan.status = Scan.Status.FAILED
-        scan.failure_reason = str(e)
         logger.exception(f"Failed processing for scan {scan_id}: {e}")
-
-    finally:
-        scan.save()
         
-        if scan.status == Scan.Status.COMPLETED:
-            create_and_send_notification(user=scan.user, title="Scan Completed", message=f"Your scan '{scan.name}' has been successfully processed.")
-        elif scan.status == Scan.Status.FAILED:
-            create_and_send_notification(user=scan.user, title="Scan Failed", message=f"There was an error processing your scan '{scan.name}'.")
+        try:
+            scan = Scan.objects.get(id=scan_id)
+            scan.status = Scan.Status.FAILED
+            scan.failure_reason = str(e)
+            scan.save()
+            
+            create_and_send_notification(
+                user=scan.user, 
+                title="Scan Failed", 
+                message=f"There was an error processing your scan '{scan.name}'."
+            )
+        except:
+            pass

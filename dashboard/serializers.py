@@ -40,11 +40,8 @@ class DashboardScanSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source='user.email', read_only=True)
     submission_date = serializers.DateTimeField(source='created_at', read_only=True)
     reconstructed_3d_head = serializers.SerializerMethodField()
-    image_front_url = serializers.SerializerMethodField()
-    image_back_url = serializers.SerializerMethodField()
-    image_left_url = serializers.SerializerMethodField()
-    image_right_url = serializers.SerializerMethodField()
     pdf_report_url = serializers.SerializerMethodField()
+    scan_images = serializers.SerializerMethodField()
     head_width = serializers.CharField()
     head_height = serializers.CharField()
     head_length = serializers.CharField()
@@ -63,7 +60,34 @@ class DashboardScanSerializer(serializers.ModelSerializer):
     cheek_guard_width_N = serializers.CharField()
     class Meta:
         model = Scan
-        fields = ('scan_id','name','email','submission_date','status','notes','custom_field','reconstructed_3d_head','image_front_url','image_back_url','image_left_url','image_right_url','pdf_report_url','head_width','head_height','head_length','ear_to_ear','eye_to_eye','head_circumference_A','forehead_to_back_B','cross_measurement_C','under_chin_D','eyebrow_to_earlobe_E','eye_corner_to_ear_F','ear_height_G','ear_width_H','cheek_guard_clearance_L','cheek_guard_height_M','cheek_guard_width_N')
+        fields = (
+            'scan_id',
+            'name',
+            'email',
+            'submission_date',
+            'status',
+            'notes',
+            'custom_field',
+            'reconstructed_3d_head',
+            'scan_images',
+            'pdf_report_url',
+            'head_width',
+            'head_height',
+            'head_length',
+            'ear_to_ear',
+            'eye_to_eye',
+            'head_circumference_A',
+            'forehead_to_back_B',
+            'cross_measurement_C',
+            'under_chin_D',
+            'eyebrow_to_earlobe_E',
+            'eye_corner_to_ear_F',
+            'ear_height_G',
+            'ear_width_H',
+            'cheek_guard_clearance_L',
+            'cheek_guard_height_M',
+            'cheek_guard_width_N'
+        )
 
     def get_pdf_report_url(self, obj):
         if obj.status == Scan.Status.COMPLETED:
@@ -74,35 +98,45 @@ class DashboardScanSerializer(serializers.ModelSerializer):
     def get_reconstructed_3d_head(self, obj):
         request = self.context.get('request')
         return get_full_media_url(request, obj.processed_3d_model)
-    def get_image_front_url(self, obj):
+
+    def get_scan_images(self, obj):
         request = self.context.get('request')
-        return get_full_media_url(request, obj.image_front)
-    def get_image_back_url(self, obj):
-        request = self.context.get('request')
-        return get_full_media_url(request, obj.image_back)
-    def get_image_left_url(self, obj):
-        request = self.context.get('request')
-        return get_full_media_url(request, obj.image_left)
-    def get_image_right_url(self, obj):
-        request = self.context.get('request')
-        return get_full_media_url(request, obj.image_right)
+        images = []
+        
+        front_url = get_full_media_url(request, obj.image_front)
+        if front_url:
+            images.append(front_url)
+            
+        for extra in obj.extra_images.all():
+            url = get_full_media_url(request, extra.image)
+            if url:
+                images.append(url)
+        
+        return {
+            "thumbnail": front_url,
+            "all_images": images
+        }
 
 class DashboardContactMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ContactMessage
         fields = '__all__'
+
 class PushNotificationSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=255)
     message = serializers.CharField()
+
 class AdminNotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = AdminNotification
         fields = ('id', 'notification_type', 'title', 'message', 'is_read', 'created_at')
+
 class SiteContentSerializer(serializers.ModelSerializer):
     slug = serializers.SlugField(read_only=True)
     class Meta:
         model = SiteContent
         fields = '__all__'
+
 class AdminProfileSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source='get_full_name')
     email = serializers.EmailField()
@@ -114,20 +148,24 @@ class AdminProfileSerializer(serializers.ModelSerializer):
     def get_profile_picture(self, obj):
         request = self.context.get('request')
         return get_full_media_url(request, obj.profile.profile_picture)
+
 class AdminUpdateProfileSerializer(serializers.ModelSerializer):
     profile_picture = serializers.ImageField(required=False, write_only=True)
     class Meta:
         model = UserProfile
         fields = ('contact_number', 'profile_picture')
+
 class AdminChangePasswordSerializer(serializers.Serializer):
     current_password = serializers.CharField(write_only=True, required=True)
     new_password = serializers.CharField(write_only=True, required=True, validators=[PasswordValidator.validate_password_strength])
     confirm_new_password = serializers.CharField(write_only=True, required=True)
+    
     def validate_current_password(self, value):
         user = self.context['request'].user
         if not user.check_password(value):
             raise serializers.ValidationError("Current password is not correct.")
         return value
+    
     def validate(self, data):
         if data['new_password'] != data['confirm_new_password']:
             raise serializers.ValidationError("New passwords do not match.")
