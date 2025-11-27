@@ -1,6 +1,11 @@
 from django.contrib import admin
-from .models import Scan
+from .models import Scan, ScanImage
 from django.db import models
+
+class ScanImageInline(admin.TabularInline):
+    model = ScanImage
+    extra = 0
+    readonly_fields = ('image', 'created_at')
 
 @admin.register(Scan)
 class ScanAdmin(admin.ModelAdmin): 
@@ -15,12 +20,14 @@ class ScanAdmin(admin.ModelAdmin):
     list_filter = ('status', 'created_at')
     search_fields = ('name', 'user__username', 'id__iexact')
     
+    inlines = [ScanImageInline]
+
     fieldsets = (
         ('Scan Details', {
             'fields': ('id', 'name', 'user', 'status', 'failure_reason')
         }),
         ('User Inputs', {
-            'fields': ('notes', 'custom_field', 'image_front', 'image_back', 'image_left', 'image_right')
+            'fields': ('notes', 'custom_field', 'image_front')
         }),
         ('Final Measurements (cm)', {
             'fields': (
