@@ -6,6 +6,7 @@ from reportlab.lib.pagesizes import LETTER
 from reportlab.lib.units import inch
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as ReportLabImage
+from PIL import Image as PILImage, ImageDraw, ImageFont
 
 BRAND_COLOR = colors.HexColor("#1A2B4C")
 ACCENT_COLOR = colors.HexColor("#E8E8E8") 
@@ -141,15 +142,48 @@ def generate_scan_pdf(scan_object):
     if os.path.exists(guide_path):
         elements.append(Paragraph("Measurement Reference", styles['SectionTitle']))
         try:
-            guide_img = ReportLabImage(guide_path)
+            pil_img = PILImage.open(guide_path)
+            draw = ImageDraw.Draw(pil_img)
+            W, H = pil_img.size
+
+            try:
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 40)
+            except IOError:
+                font = ImageFont.load_default()
+
+            text_color = "#E74C3C"
+
+            if scan_object.ear_to_ear:
+                val = f"{scan_object.ear_to_ear} cm"
+                draw.text((W * 0.25, H * 0.18), val, fill=text_color, font=font, anchor="mm")
+            
+            if scan_object.head_width:
+                val = f"{scan_object.head_width} cm"
+                draw.text((W * 0.75, H * 0.18), val, fill=text_color, font=font, anchor="mm")
+            
+            if scan_object.head_height:
+                val = f"{scan_object.head_height} cm"
+                draw.text((W * 0.25, H * 0.65), val, fill=text_color, font=font, anchor="mm")
+            
+            if scan_object.eye_to_eye:
+                val = f"{scan_object.eye_to_eye} cm"
+                draw.text((W * 0.75, H * 0.65), val, fill=text_color, font=font, anchor="mm")
+
+            img_buffer = io.BytesIO()
+            pil_img.save(img_buffer, format='PNG')
+            img_buffer.seek(0)
+            
+            guide_img = ReportLabImage(img_buffer)
             aspect = guide_img.imageHeight / float(guide_img.imageWidth)
             guide_img.drawWidth = 6.5 * inch
             guide_img.drawHeight = 6.5 * inch * aspect
+            
             guide_table = Table([[guide_img]], colWidths=[7*inch])
             guide_table.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'CENTER')]))
             elements.append(guide_table)
-        except Exception as e:
-            print(f"Error loading guide image: {e}")
+
+        except Exception:
+            pass
 
     doc.build(elements, onFirstPage=_header_footer, onLaterPages=_header_footer)
     
