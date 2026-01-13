@@ -35,7 +35,7 @@ def _init_avatar(api_key, img_count):
     url = _make_url("init") 
     headers = _get_api_headers(api_key)
     headers['Content-Type'] = 'application/json'
-    payload = {"img_count": img_count}
+    payload = {"image_count": img_count}
 
     logger.info(f"--- Step 1: Init for {img_count} images ---")
     try:
@@ -63,23 +63,26 @@ def _upload_photo(image_path, upload_url):
         raise PipelineError(f"Upload failed: {e}")
 
 def _start_reconstruction(api_key, avatar_id, img_count):
-    url = _make_url(f"{avatar_id}/create")
+    url = _make_url(f"{avatar_id}/process")
     headers = _get_api_headers(api_key)
     headers['Content-Type'] = 'application/json'
     
     payload = {
-        "focal_length_type": "manual",
-        "focal_length_values": [28.0] * img_count, 
+        "focal_length_type": {
+            "focal_length_type": "manual",
+            "focal_length_values": [28.0] * img_count
+        },
         "expressions_enabled": False
     }
 
     logger.info(f"--- Step 3: Start Reconstruction ---")
     response = requests.post(url, headers=headers, json=payload, timeout=30)
-    if response.status_code != 200: 
+    
+    if response.status_code not in [200, 400]: 
         raise PipelineError(f"Start failed: {response.status_code} - {response.text}")
 
 def _poll_for_completion(api_key, avatar_id, timeout=600):
-    status_url = _make_url(f"{avatar_id}/get_status")
+    status_url = _make_url(f"{avatar_id}/get-status")
     headers = _get_api_headers(api_key)
     headers['Content-Type'] = 'application/json'
     start_time = time.time()
@@ -95,91 +98,96 @@ def _poll_for_completion(api_key, avatar_id, timeout=600):
                 logger.info("--- Completed ---")
                 return
             elif status == 'failed':
-                raise PipelineError(f"Job failed: {data.get('data')}")
+                error_msg = data.get('data', {}).get('error_message', 'Unknown error')
+                raise PipelineError(f"Job failed: {error_msg}")
             
             time.sleep(6)
+        except PipelineError:
+            raise
         except Exception:
             time.sleep(6)
     raise PipelineError("Job timed out.")
 
-def _download_obj_for_math(api_key, avatar_id):
-    url = _make_url(f"{avatar_id}/get_3d_model/single_head")
+def _download_file_logic(api_key, avatar_id, params, timeout=180):
+    url = _make_url(f"{avatar_id}/get-3d-model")
     headers = _get_api_headers(api_key)
+    
+    start_time = time.time()
+    
+    while time.time() - start_time < timeout:
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=30)
+            
+            if response.status_code == 425:
+                time.sleep(2)
+                continue
+                
+            if response.status_code != 200:
+                raise PipelineError(f"API Error {response.status_code}: {response.text}")
+
+            json_resp = response.json()
+            event = json_resp.get("event")
+            data = json_resp.get("data", {})
+
+            if event == "retry-after":
+                wait_time = data.get("time_sec", 2)
+                time.sleep(wait_time)
+                continue
+            
+            elif event == "redirect":
+                download_url = data.get("url")
+                if not download_url:
+                    raise PipelineError("Redirect event received but no URL provided.")
+                
+                file_res = requests.get(download_url, timeout=180)
+                file_res.raise_for_status()
+                return file_res.content
+            
+            else:
+                raise PipelineError(f"Unknown event type: {event}")
+
+        except requests.RequestException as e:
+            time.sleep(2)
+            if time.time() - start_time > timeout:
+                raise PipelineError(f"Download error: {e}")
+
+    raise PipelineError("Download timed out.")
+
+def _download_obj_for_math(api_key, avatar_id):
     logger.info("--- Downloading OBJ for Measurements ---")
     
-    for i in range(50):
-        response = requests.get(url, headers=headers, allow_redirects=False, timeout=60)
-        
-        if response.status_code == 302:
-            file_res = requests.get(response.headers["Location"], timeout=180)
-            temp = tempfile.NamedTemporaryFile(delete=False, suffix=".obj")
-            temp.write(file_res.content)
-            temp.close()
-            return temp.name
-            
-        elif response.status_code == 200:
-            temp = tempfile.NamedTemporaryFile(delete=False, suffix=".obj")
-            temp.write(response.content)
-            temp.close()
-            return temp.name
-            
-        elif response.status_code in (202, 425):
-            time.sleep(5)
-            continue
-        else:
-            raise PipelineError(f"OBJ Download failed: {response.status_code}")
-    raise PipelineError("OBJ Download timeout")
+    params = {
+        "mesh_format": "obj",
+        "mesh_lod": "high_poly"
+    }
+    
+    file_content = _download_file_logic(api_key, avatar_id, params)
+    
+    temp = tempfile.NamedTemporaryFile(delete=False, suffix=".obj")
+    temp.write(file_content)
+    temp.close()
+    return temp.name
 
 def _download_glb_for_display(scan, api_key, avatar_id):
-    url = _make_url(f"{avatar_id}/get_3d_model/neutral_with_blendshapes_glb")
-    headers = _get_api_headers(api_key)
-    params = {"texture": "true"}
-    
     logger.info("--- Downloading Textured GLB for Display ---")
     
-    for i in range(50):
-        response = requests.get(url, headers=headers, params=params, allow_redirects=False, timeout=60)
-        
-        if response.status_code == 302:
-            logger.info("GLB Ready. Downloading...")
-            final_url = response.headers["Location"]
-            file_res = requests.get(final_url, timeout=180)
-            file_res.raise_for_status()
-            
-            temp_path = None
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".glb") as temp_file:
-                temp_file.write(file_res.content)
-                temp_path = temp_file.name
-            
-            with open(temp_path, 'rb') as f:
-                scan.processed_3d_model.save(f"{scan.id}_model.glb", File(f), save=True)
-            
-            os.remove(temp_path)
-            return
-
-        elif response.status_code in (202, 425):
-            logger.info(f"GLB Generating... ({i+1}/50)")
-            time.sleep(6)
-            continue
-        
-        else:
-            if response.status_code == 200:
-                temp_path = None
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".glb") as temp_file:
-                    temp_file.write(response.content)
-                    temp_path = temp_file.name
-                
-                with open(temp_path, 'rb') as f:
-                    scan.processed_3d_model.save(f"{scan.id}_model.glb", File(f), save=True)
-                
-                os.remove(temp_path)
-                return
-
-            logger.error(f"GLB Error: {response.status_code} - {response.text}")
-            raise PipelineError(f"GLB Download failed: {response.status_code}")
-
-    raise PipelineError("GLB Download timeout")
-
+    params = {
+        "mesh_format": "glb",
+        "mesh_lod": "high_poly",
+        "texture": "jpg"
+    }
+    
+    file_content = _download_file_logic(api_key, avatar_id, params)
+    
+    temp_path = None
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".glb") as temp_file:
+        temp_file.write(file_content)
+        temp_path = temp_file.name
+    
+    with open(temp_path, 'rb') as f:
+        scan.processed_3d_model.save(f"{scan.id}_model.glb", File(f), save=True)
+    
+    os.remove(temp_path)
 
 def run_full_scan_pipeline(scan_id):
     from scans.models import Scan

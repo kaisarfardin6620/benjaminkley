@@ -15,3 +15,4 @@ serviceAccountKey.json
 media
 .cache
 .continue
+celerybeat-schedule
