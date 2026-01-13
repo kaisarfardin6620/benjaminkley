@@ -4,6 +4,7 @@ from django.conf import settings
 from django.urls import reverse
 from core.utils import get_full_media_url
 from urllib.parse import urljoin
+import os
 
 class ScanCreateSerializer(serializers.ModelSerializer):
     image_front = serializers.ImageField(required=True)
@@ -18,14 +19,32 @@ class ScanCreateSerializer(serializers.ModelSerializer):
         model = Scan
         fields = ('name', 'notes', 'custom_field', 'image_front', 'extra_images')
 
+    def _validate_image_file(self, image):
+        MAX_SIZE = 50 * 1024 * 1024
+        if image.size > MAX_SIZE:
+            raise serializers.ValidationError(f"Image {image.name} is too large. Max size is 50MB.")
+        
+        valid_types = ['image/jpeg', 'image/png', 'image/jpg']
+        if image.content_type not in valid_types:
+            ext = os.path.splitext(image.name)[1].lower()
+            if ext not in ['.jpg', '.jpeg', '.png']:
+                raise serializers.ValidationError(f"Image {image.name} has invalid format. Only JPG/PNG allowed.")
+
+    def validate_image_front(self, value):
+        self._validate_image_file(value)
+        return value
+
     def validate(self, attrs):
         front = attrs.get('image_front')
         extras = attrs.get('extra_images', [])
         
         total_images = 1 + len(extras)
-        
         if total_images < 5:
             raise serializers.ValidationError(f"You uploaded {total_images} images. Minimum 5 required.")
+        
+        for img in extras:
+            self._validate_image_file(img)
+
         return attrs
 
     def create(self, validated_data):

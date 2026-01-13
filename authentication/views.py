@@ -44,7 +44,6 @@ class UserSignupAPIView(APIView):
     parser_classes = [MultiPartParser, FormParser]
     throttle_classes = [AnonRateThrottle]
 
-    @transaction.atomic
     def post(self, request):
         serializer = SignupSerializer(data=request.data)
         if not serializer.is_valid():
@@ -52,9 +51,11 @@ class UserSignupAPIView(APIView):
             message = first_error if "This field" not in first_error else "Please fill in all required fields before signing up."
             return Response({"message": message, "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
-        user = serializer.save()
-        otp = generate_otp()
-        AuthToken.objects.create(user=user, otp_code=otp, token_type='signup')
+        with transaction.atomic():
+            user = serializer.save()
+            otp = generate_otp()
+            AuthToken.objects.create(user=user, otp_code=otp, token_type='signup')
+        
         send_otp_email(user, otp, purpose="email verification")
         return Response({"message": "User registered. An OTP has been sent to your email to verify your account."}, status=status.HTTP_201_CREATED)
 
@@ -62,36 +63,46 @@ class VerifySignupOTPView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [AnonRateThrottle]
 
-    @transaction.atomic
     def post(self, request):
         serializer = OTPVerificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         otp = serializer.validated_data['otp']
-        try:
-            token = AuthToken.objects.select_for_update().get(otp_code=otp, token_type='signup', is_used=False, expires_at__gt=timezone.now())
-        except AuthToken.DoesNotExist:
-            return Response({'error': 'Invalid or expired OTP.'}, status=status.HTTP_400_BAD_REQUEST)
-        user = token.user
-        profile = user.profile
+        
+        user_to_notify = None
+        should_send_email = False
+        
+        with transaction.atomic():
+            try:
+                token = AuthToken.objects.select_for_update().get(otp_code=otp, token_type='signup', is_used=False, expires_at__gt=timezone.now())
+            except AuthToken.DoesNotExist:
+                return Response({'error': 'Invalid or expired OTP.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            user = token.user
+            profile = user.profile
 
-        if profile.status == 'UNVERIFIED':
-            profile.status = 'PENDING'
-            profile.save()
+            if profile.status == 'UNVERIFIED':
+                profile.status = 'PENDING'
+                profile.save()
 
-            AdminNotification.objects.create(
-                notification_type=AdminNotification.NotificationType.NEW_USER,
-                message=f"New user '{user.get_full_name()}' has verified their email and requires approval."
-            )
+                AdminNotification.objects.create(
+                    notification_type=AdminNotification.NotificationType.NEW_USER,
+                    message=f"New user '{user.get_full_name()}' has verified their email and requires approval."
+                )
+                user_to_notify = user
+                should_send_email = True
+
+            token.is_used = True
+            token.save()
+
+        if should_send_email and user_to_notify:
             approval_message = "Congratulations, you successfully signed up. You will receive an email notification as soon as your account is approved."
-            send_email("Welcome! Your account is awaiting approval", approval_message, [user.email])
+            send_email("Welcome! Your account is awaiting approval", approval_message, [user_to_notify.email])
             create_and_send_notification(
-                user=user,
+                user=user_to_notify,
                 title="Account Pending Approval",
                 message=approval_message
             )
 
-        token.is_used = True
-        token.save()
         return Response({'message': 'Email verified successfully. Your account is now awaiting admin approval.'}, status=status.HTTP_200_OK)
 
 class AcceptTermsAPIView(APIView):
@@ -106,27 +117,39 @@ class ResendSignupOTPView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [AnonRateThrottle]
 
-    @transaction.atomic
     def post(self, request):
         serializer = ResendVerificationSerializer(data=request.data)
         if serializer.is_valid():
             email = serializer.validated_data['email']
-            try:
-                user = User.objects.get(email__iexact=email)
-                if user.is_active:
-                    return Response({'error': 'This account is already active.'}, status=status.HTTP_400_BAD_REQUEST)
-                if user.profile.status != 'UNVERIFIED':
-                    return Response({'error': 'This account has already been verified and is pending approval.'}, status=status.HTTP_400_BAD_REQUEST)
-                
-                AuthToken.objects.filter(user=user, token_type='signup', is_used=False).update(is_used=True)
-                
-                otp = generate_otp()
-                AuthToken.objects.create(user=user, otp_code=otp, token_type='signup')
-                send_otp_email(user, otp, purpose="account verification")
+            user_found = False
+            otp = None
+            user_obj = None
+
+            with transaction.atomic():
+                try:
+                    user = User.objects.get(email__iexact=email)
+                    if user.is_active:
+                        return Response({'error': 'This account is already active.'}, status=status.HTTP_400_BAD_REQUEST)
+                    if user.profile.status != 'UNVERIFIED':
+                        return Response({'error': 'This account has already been verified and is pending approval.'}, status=status.HTTP_400_BAD_REQUEST)
+                    
+                    AuthToken.objects.filter(user=user, token_type='signup', is_used=False).update(is_used=True)
+                    
+                    otp = generate_otp()
+                    AuthToken.objects.create(user=user, otp_code=otp, token_type='signup')
+                    user_found = True
+                    user_obj = user
+                except User.DoesNotExist:
+                    pass
+            
+            if user_found and otp:
+                send_otp_email(user_obj, otp, purpose="account verification")
                 return Response({'message': 'New OTP sent to your email.'}, status=status.HTTP_200_OK)
-            except User.DoesNotExist:
-                return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+            elif not user_found and not otp:
+                 return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 class MyTokenObtainPairView(APIView):
     permission_classes = [AllowAny]
     serializer_class = MyTokenObtainPairSerializer
@@ -184,15 +207,16 @@ class UpdateProfileAPIView(APIView):
 class ChangePasswordAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
-    @transaction.atomic
     def post(self, request):
         serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
-            user = request.user
-            new_password = serializer.validated_data['new_password']
-            user.set_password(new_password)
-            user.save()
-            PasswordHistory.objects.create(user=user, hashed_password=user.password)
+            with transaction.atomic():
+                user = request.user
+                new_password = serializer.validated_data['new_password']
+                user.set_password(new_password)
+                user.save()
+                PasswordHistory.objects.create(user=user, hashed_password=user.password)
+            
             create_and_send_notification(
                 user=user,
                 title="Security Alert: Password Changed",
@@ -205,60 +229,76 @@ class PasswordResetRequestOTPView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [AnonRateThrottle]
 
-    @transaction.atomic
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
         if serializer.is_valid():
             email = serializer.validated_data['email']
-            try:
-                user = User.objects.get(email__iexact=email)
-                AuthToken.objects.filter(user=user, token_type='password_reset_otp').delete()
-                otp = generate_otp()
-                AuthToken.objects.create(user=user, otp_code=otp, token_type='password_reset_otp')
-                send_otp_email(user, otp, purpose="password reset")
+            otp = None
+            user_obj = None
+            
+            with transaction.atomic():
+                try:
+                    user = User.objects.get(email__iexact=email)
+                    AuthToken.objects.filter(user=user, token_type='password_reset_otp').delete()
+                    otp = generate_otp()
+                    AuthToken.objects.create(user=user, otp_code=otp, token_type='password_reset_otp')
+                    user_obj = user
+                except User.DoesNotExist:
+                     return Response({'error': 'No active account found with this email address.'}, status=status.HTTP_404_NOT_FOUND)
+            
+            if user_obj and otp:
+                send_otp_email(user_obj, otp, purpose="password reset")
                 return Response({'message': 'An OTP has been sent to your email.'}, status=status.HTTP_200_OK)
-            except User.DoesNotExist:
-                return Response({'error': 'No active account found with this email address.'}, status=status.HTTP_404_NOT_FOUND)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 class ResendPasswordResetOTPView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [AnonRateThrottle]
 
-    @transaction.atomic
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
         if serializer.is_valid():
             email = serializer.validated_data['email']
-            try:
-                user = User.objects.get(email__iexact=email)
-                AuthToken.objects.filter(user=user, token_type='password_reset_otp', is_used=False).update(is_used=True)
-                otp = generate_otp()
-                AuthToken.objects.create(user=user, otp_code=otp, token_type='password_reset_otp')
-                send_otp_email(user, otp, purpose="password reset")
+            otp = None
+            user_obj = None
+
+            with transaction.atomic():
+                try:
+                    user = User.objects.get(email__iexact=email)
+                    AuthToken.objects.filter(user=user, token_type='password_reset_otp', is_used=False).update(is_used=True)
+                    otp = generate_otp()
+                    AuthToken.objects.create(user=user, otp_code=otp, token_type='password_reset_otp')
+                    user_obj = user
+                except User.DoesNotExist:
+                    return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+            
+            if user_obj and otp:
+                send_otp_email(user_obj, otp, purpose="password reset")
                 return Response({'message': 'New OTP for password reset has been sent to your email.'}, status=status.HTTP_200_OK)
-            except User.DoesNotExist:
-                return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class VerifyPasswordResetOTPView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [AnonRateThrottle]
 
-    @transaction.atomic 
     def post(self, request):
         serializer = PasswordResetVerifyOTPSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         otp = serializer.validated_data['otp']
-        try:
-            token = AuthToken.objects.select_for_update().get(
-                otp_code=otp, token_type='password_reset_otp',
-                is_used=False, expires_at__gt=timezone.now()
-            )
-        except AuthToken.DoesNotExist:
-            return Response({'error': 'Invalid or expired OTP.'}, status=status.HTTP_400_BAD_REQUEST)
-        token.is_used = True
-        token.save()
-        change_ticket = AuthToken.objects.create(user=token.user, token_type='password_change_ticket')
+        
+        with transaction.atomic():
+            try:
+                token = AuthToken.objects.select_for_update().get(
+                    otp_code=otp, token_type='password_reset_otp',
+                    is_used=False, expires_at__gt=timezone.now()
+                )
+            except AuthToken.DoesNotExist:
+                return Response({'error': 'Invalid or expired OTP.'}, status=status.HTTP_400_BAD_REQUEST)
+            token.is_used = True
+            token.save()
+            change_ticket = AuthToken.objects.create(user=token.user, token_type='password_change_ticket')
+            
         return Response({
             'message': 'OTP verified successfully.',
             'password_change_ticket': change_ticket.token
@@ -268,34 +308,35 @@ class SetNewPasswordView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [AnonRateThrottle] 
 
-    @transaction.atomic 
     def post(self, request):
         serializer = SetNewPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         ticket = serializer.validated_data['password_change_ticket']
         new_password = serializer.validated_data['new_password']
-        try:
-            verified_token = AuthToken.objects.select_for_update().get(
-                token=ticket, token_type='password_change_ticket',
-                is_used=False, expires_at__gt=timezone.now()
-            )
-        except AuthToken.DoesNotExist:
-            return Response({'error': 'Invalid or expired password change session. Please start over.'}, status=status.HTTP_400_BAD_REQUEST)
-        user = verified_token.user
-        for history in PasswordHistory.objects.filter(user=user).order_by('-created_at')[:10]:
-            if check_password(new_password, history.hashed_password):
-                return Response({'error': 'Cannot reuse a recent password.'}, status=status.HTTP_400_BAD_REQUEST)
-        user.set_password(new_password)
-        user.save()
-        PasswordHistory.objects.create(user=user, hashed_password=user.password)
-        verified_token.is_used = True
-        verified_token.save()
+        
+        with transaction.atomic():
+            try:
+                verified_token = AuthToken.objects.select_for_update().get(
+                    token=ticket, token_type='password_change_ticket',
+                    is_used=False, expires_at__gt=timezone.now()
+                )
+            except AuthToken.DoesNotExist:
+                return Response({'error': 'Invalid or expired password change session. Please start over.'}, status=status.HTTP_400_BAD_REQUEST)
+            user = verified_token.user
+            for history in PasswordHistory.objects.filter(user=user).order_by('-created_at')[:10]:
+                if check_password(new_password, history.hashed_password):
+                    return Response({'error': 'Cannot reuse a recent password.'}, status=status.HTTP_400_BAD_REQUEST)
+            user.set_password(new_password)
+            user.save()
+            PasswordHistory.objects.create(user=user, hashed_password=user.password)
+            verified_token.is_used = True
+            verified_token.save()
+
         return Response({'message': 'Your password has been reset successfully.'}, status=status.HTTP_200_OK)
 
 class DeleteUserAccountAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
-    @transaction.atomic
     def delete(self, request, *args, **kwargs):
         serializer = DeleteAccountSerializer(
             data=request.data,
@@ -303,8 +344,11 @@ class DeleteUserAccountAPIView(APIView):
         )
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        user = request.user
-        user.delete()
+        
+        with transaction.atomic():
+            user = request.user
+            user.delete()
+            
         return Response(
             {"message": "Your account has been permanently deleted."},
             status=status.HTTP_200_OK

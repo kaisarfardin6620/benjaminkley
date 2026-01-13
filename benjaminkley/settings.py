@@ -147,14 +147,15 @@ SIMPLE_JWT = {
     'TOKEN_OBTAIN_SERIALIZER': 'authentication.serializers.MyTokenObtainPairSerializer',
 }
 
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
 EMAIL_HOST = os.getenv('EMAIL_HOST')
 EMAIL_PORT = int(os.getenv('EMAIL_PORT', 465))
+EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'True').lower() == 'true'
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'False').lower() == 'true'
-EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'True').lower() == 'true' 
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+
 CORS_ALLOWED_ORIGINS = CSRF_TRUSTED_ORIGINS
 CORS_ALLOW_CREDENTIALS = True
 
@@ -205,4 +206,4 @@ CELERY_TIMEZONE = 'UTC'
 USE_X_FORWARDED_HOST = True 
 
 KEENTOOLS_SECRET_KEY = os.getenv('KEENTOOLS_SECRET_KEY')
-KEENTOOLS_API_BASE_URL = os.getenv('KEENTOOLS_API_BASE_URL', "https://br7ls2mdjpzkmchaeuwlp6hf54ozlmfq.lambda-url.us-east-1.on.aws/")
+KEENTOOLS_API_BASE_URL = os.getenv('KEENTOOLS_API_BASE_URL', "https://br7ls2mdjpzkmchaeuwlp6hf540zimfq.lambda-url.us-east-1.on.aws/v1/avatar/")
