@@ -15,7 +15,14 @@ if [ "$COMMAND" = "web" ]; then
     python manage.py collectstatic --no-input --clear
 
     echo "--- Starting Gunicorn web server on port $PORT ---"
-    exec gunicorn benjaminkley.wsgi --bind 0.0.0.0:$PORT --workers 3 --timeout 120
+    # CHANGED: Added '--access-logfile -' and '--error-logfile -'
+    # The '-' tells Gunicorn to write logs to Docker's standard output
+    exec gunicorn benjaminkley.wsgi \
+        --bind 0.0.0.0:$PORT \
+        --workers 3 \
+        --timeout 120 \
+        --access-logfile - \
+        --error-logfile -
 
 elif [ "$COMMAND" = "celery-worker" ]; then
     echo "--- Starting Celery worker ---"
