@@ -3,20 +3,17 @@ services:
   redis:
     image: "redis:7-alpine"
     container_name: benjaminkley-redis
-    networks:
-      - app-network
+    network_mode: "host"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
-
   # Django App
   app:
     build: .
     container_name: benjaminkley-app
-    ports:
-      - "8000:8000"
+    network_mode: "host"
     volumes:
       - type: bind
         source: .
@@ -36,10 +33,6 @@ services:
       - PORT=8000
       - TZ=UTC
       - MPLCONFIGDIR=/app/.cache/matplotlib
-    networks:
-      - app-network
-    dns:
-      - 8.8.8.8
     command: ["/app/docker-entrypoint.sh", "web"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/admin/login/"]
@@ -50,11 +43,11 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-
   # Celery worker service for background tasks
   celery-worker:
     build: .
     container_name: benjaminkley-celery-worker
+    network_mode: "host"
     command: ["/app/docker-entrypoint.sh", "celery-worker"]
     volumes:
       - type: bind
@@ -68,20 +61,16 @@ services:
     environment:
       - TZ=UTC
       - MPLCONFIGDIR=/app/.cache/matplotlib
-    networks:
-      - app-network
     depends_on:
       redis:
         condition: service_healthy
       app:
         condition: service_started
-
   # Nginx service
   nginx:
     image: nginx:1.25
     container_name: benjaminkley-nginx
-    ports:
-      - "8080:80"
+    network_mode: "host"
     volumes:
       - type: bind
         source: ./benjaminkley.conf
@@ -98,12 +87,5 @@ services:
     depends_on:
       app:
         condition: service_healthy
-    networks:
-      - app-network
-
-networks:
-  app-network:
-    driver: bridge
-
 volumes:
   staticfiles: {}
