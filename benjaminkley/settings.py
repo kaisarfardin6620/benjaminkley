@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'notifications',
     'fcm_django',
     'django_filters',
+    'drf_spectacular',
 ]
 
 MIDDLEWARE = [
@@ -57,8 +58,8 @@ MIDDLEWARE = [
 DATABASES = {
     'default': dj_database_url.config(
         default=os.getenv('DATABASE_URL', f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
-        conn_max_age=600,
-        conn_health_checks=True
+        conn_max_age=0,
+        conn_health_checks=False
     )
 }
 
@@ -114,6 +115,10 @@ USE_I18N = True
 USE_TZ = True
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+_RENDERER_CLASSES = ['core.renderers.CustomJSONRenderer']
+if DEBUG:
+    _RENDERER_CLASSES.append('rest_framework.renderers.BrowsableAPIRenderer')
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': ('rest_framework_simplejwt.authentication.JWTAuthentication',),
     'DEFAULT_THROTTLE_CLASSES': [
@@ -121,16 +126,14 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.UserRateThrottle'
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '100/day', 
+        'anon': '100/day',
         'user': '1000/day',
     },
-    'DEFAULT_RENDERER_CLASSES': [
-        'core.renderers.CustomJSONRenderer',
-        'rest_framework.renderers.BrowsableAPIRenderer',
-    ],
+    'DEFAULT_RENDERER_CLASSES': _RENDERER_CLASSES,
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
     'EXCEPTION_HANDLER': 'dashboard.exception_handler.custom_exception_handler',
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 SIMPLE_JWT = {
@@ -207,3 +210,13 @@ USE_X_FORWARDED_HOST = True
 
 KEENTOOLS_SECRET_KEY = os.getenv('KEENTOOLS_SECRET_KEY')
 KEENTOOLS_API_BASE_URL = os.getenv('KEENTOOLS_API_BASE_URL', "https://br7ls2mdjpzkmchaeuwlp6hf540zimfq.lambda-url.us-east-1.on.aws/v1/avatar/")
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Benjamin Kley API',
+    'DESCRIPTION': 'REST API for the Benjamin Kley 3D Head Scanner platform.',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SCHEMA_PATH_PREFIX': '/api/',
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SORT_OPERATIONS': False,
+}

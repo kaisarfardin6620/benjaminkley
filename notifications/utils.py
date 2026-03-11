@@ -1,6 +1,9 @@
+import logging
 from fcm_django.models import FCMDevice
 from .models import Notification
-from firebase_admin import messaging 
+from firebase_admin import messaging
+
+logger = logging.getLogger(__name__)
 
 def create_and_send_notification(user, title, message):
     Notification.objects.create(
@@ -17,8 +20,16 @@ def create_and_send_notification(user, title, message):
                     notification=messaging.Notification(title=title, body=message)
                 )
             )
-            print(f"Successfully sent PUSH NOTIFICATION to {devices.count()} devices for user {user.username}.")
+            logger.info(
+                "Sent push notification to %d device(s) for user %s.",
+                devices.count(), user.username
+            )
         else:
-            print(f"No active devices found for user {user.username}. Push notification not sent.")
+            logger.debug(
+                "No active devices for user %s. Push notification skipped.",
+                user.username
+            )
     except Exception as e:
-        print(f"Failed to send push notification for user {user.username}: {e}")
+        logger.exception(
+            "Failed to send push notification for user %s: %s", user.username, e
+        )

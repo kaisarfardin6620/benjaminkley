@@ -70,7 +70,11 @@ class MonthlyOverviewChartAPIView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-        data = self.model.objects.annotate(month=TruncMonth(self.date_field)) \
+        current_year = timezone.now().year
+        year_filter = {f"{self.date_field}__year": current_year}
+
+        data = self.model.objects.filter(**year_filter) \
+            .annotate(month=TruncMonth(self.date_field)) \
             .values('month') \
             .annotate(count=Count('id')) \
             .order_by('month')
@@ -298,6 +302,17 @@ class AdminChangePasswordView(APIView):
             user.set_password(new_password)
             user.save()
             PasswordHistory.objects.create(user=user, hashed_password=user.password)
+            send_email(
+                "Security Alert: Your Admin Password Was Changed",
+                f"Hi {user.first_name},\n\nYour administrator account password was just changed. "
+                "If you did not make this change, please contact your system administrator immediately.",
+                [user.email]
+            )
+            create_and_send_notification(
+                user=user,
+                title="Security Alert: Admin Password Changed",
+                message="Your admin account password was successfully changed. If you did not make this change, contact support immediately."
+            )
             return Response({"message": "Password changed successfully."}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

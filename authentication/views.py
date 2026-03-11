@@ -21,7 +21,6 @@ from .serializers import (
 import random
 from dashboard.models import AdminNotification
 from notifications.utils import create_and_send_notification
-import profile
 
 def generate_otp():
     return str(random.randint(100000, 999999))
@@ -235,7 +234,7 @@ class PasswordResetRequestOTPView(APIView):
             email = serializer.validated_data['email']
             otp = None
             user_obj = None
-            
+
             with transaction.atomic():
                 try:
                     user = User.objects.get(email__iexact=email)
@@ -244,11 +243,15 @@ class PasswordResetRequestOTPView(APIView):
                     AuthToken.objects.create(user=user, otp_code=otp, token_type='password_reset_otp')
                     user_obj = user
                 except User.DoesNotExist:
-                     return Response({'error': 'No active account found with this email address.'}, status=status.HTTP_404_NOT_FOUND)
-            
+                    pass
+
             if user_obj and otp:
                 send_otp_email(user_obj, otp, purpose="password reset")
-                return Response({'message': 'An OTP has been sent to your email.'}, status=status.HTTP_200_OK)
+
+            return Response(
+                {'message': 'If an account with this email exists, an OTP has been sent.'},
+                status=status.HTTP_200_OK
+            )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class ResendPasswordResetOTPView(APIView):

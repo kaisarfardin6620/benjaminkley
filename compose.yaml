@@ -1,19 +1,29 @@
 services:
-  # Redis service for Celery message brokering
   redis:
     image: "redis:7-alpine"
     container_name: benjaminkley-redis
     network_mode: "host"
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # Django App
+  pgbouncer:
+    image: "bitnami/pgbouncer:latest"
+    container_name: benjaminkley-pgbouncer
+    network_mode: "host"
+    restart: unless-stopped
+    env_file: .env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432 -U ${PGBOUNCER_DATABASE_USERNAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   app:
     build: .
-    container_name: benjaminkley-app
     network_mode: "host"
     volumes:
       - type: bind
@@ -23,11 +33,9 @@ services:
         source: ./ai_models
         target: /app/ai_models
         read_only: true
-      # CHANGED: Bind mount allows Host Nginx to read these files
       - type: bind
         source: ./staticfiles
         target: /app/staticfiles
-      # CHANGED: Bind mount allows persistence on Host
       - type: bind
         source: ./media
         target: /app/media
@@ -37,6 +45,7 @@ services:
       - TZ=UTC
       - MPLCONFIGDIR=/app/.cache/matplotlib
     command: ["/app/docker-entrypoint.sh", "web"]
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/admin/login/"]
       interval: 30s
@@ -46,13 +55,15 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      pgbouncer:
+        condition: service_healthy
 
-  # Celery worker service for background tasks
   celery-worker:
     build: .
     container_name: benjaminkley-celery-worker
     network_mode: "host"
     command: ["/app/docker-entrypoint.sh", "celery-worker"]
+    restart: unless-stopped
     volumes:
       - type: bind
         source: .
@@ -68,6 +79,31 @@ services:
     environment:
       - TZ=UTC
       - MPLCONFIGDIR=/app/.cache/matplotlib
+    depends_on:
+      redis:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_healthy
+      app:
+        condition: service_healthy
+
+  celery-beat:
+    build: .
+    container_name: benjaminkley-celery-beat
+    network_mode: "host"
+    command: ["/app/docker-entrypoint.sh", "celery-beat"]
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: .
+        target: /app
+      - type: bind
+        source: ./ai_models
+        target: /app/ai_models
+        read_only: true
+    env_file: .env
+    environment:
+      - TZ=UTC
     depends_on:
       redis:
         condition: service_healthy

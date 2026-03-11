@@ -4,6 +4,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from dashboard.views import PrivacyPolicyAPIView, TermsAndConditionsAPIView
 from .views import serve_obj_file
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -15,6 +16,9 @@ urlpatterns = [
     path('api/terms-and-conditions/', TermsAndConditionsAPIView.as_view(), name='terms-and-conditions'),
     path('api/notifications/', include('notifications.urls')),
     re_path(r'^media/scans/outputs/(?P<filename>[^/]+\.(obj|glb))$', serve_obj_file, name='serve-obj-file'),
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 ]
 
 if settings.DEBUG:

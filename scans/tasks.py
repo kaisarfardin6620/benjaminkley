@@ -43,17 +43,20 @@ def process_scan_and_save(scan_id: str):
 
     except (PipelineError, Exception) as e:
         logger.exception(f"Failed processing for scan {scan_id}: {e}")
-        
+
         try:
             scan = Scan.objects.get(id=scan_id)
             scan.status = Scan.Status.FAILED
             scan.failure_reason = str(e)
             scan.save()
-            
+
             create_and_send_notification(
-                user=scan.user, 
-                title="Scan Failed", 
+                user=scan.user,
+                title="Scan Failed",
                 message=f"There was an error processing your scan '{scan.name}'."
             )
-        except:
-            pass
+        except Exception as fallback_exc:
+            logger.exception(
+                "Fallback failure handler also failed for scan %s: %s",
+                scan_id, fallback_exc
+            )
