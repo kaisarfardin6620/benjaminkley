@@ -117,11 +117,17 @@ services:
           cpus: '0.25'
 
   pgbouncer:
-    image: "bitnami/pgbouncer:1.23.1-debian-12-r5"
+    image: "edoburu/pgbouncer:latest"
     restart: unless-stopped
-    env_file: .env
+    environment:
+    - DB_USER=${PGBOUNCER_DATABASE_USERNAME}
+    - DB_PASSWORD=${PGBOUNCER_DATABASE_PASSWORD}
+    - DB_HOST=${PGBOUNCER_DATABASE_HOST}
+    - DB_NAME=${PGBOUNCER_DATABASE_NAME}
+    - POOL_MODE=transaction
+    - MAX_CLIENT_CONN=100
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432 -U ${PGBOUNCER_DATABASE_USERNAME}"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${PGBOUNCER_DATABASE_USERNAME}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -130,7 +136,6 @@ services:
         limits:
           memory: 256m
           cpus: '0.5'
-
   redis:
     image: "redis:7-alpine"
     restart: unless-stopped
