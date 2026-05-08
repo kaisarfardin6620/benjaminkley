@@ -18,7 +18,7 @@ class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     profile_picture = models.ImageField(upload_to='profile_pics/', blank=True, null=True)
     role = models.CharField(max_length=50, choices=Roles.choices, default=Roles.CLIENT)
-    clinic_name = models.CharField(max_length=255)
+    clinic_name = models.CharField(max_length=255, blank=True)
     date_of_birth = models.DateField()
     contact_number = PhoneNumberField(region=None, blank=True, null=True)
     class Status(models.TextChoices):

@@ -53,13 +53,19 @@ class SignupSerializer(serializers.Serializer):
     last_name = serializers.CharField(max_length=255, required=True)
     profile_picture = serializers.ImageField(required=False, allow_null=True)
     role = RoleChoiceField(choices=Roles.choices)
-    clinic_name = serializers.CharField(max_length=255, required=True)
+    clinic_name = serializers.CharField(max_length=255, required=False, allow_blank=True)
     date_of_birth = serializers.DateField(required=True, input_formats=['%m-%d-%Y'])
     contact_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     address = serializers.CharField(max_length=255, required=True)
     terms_accepted = serializers.BooleanField(write_only=True)
 
     def validate(self, data):
+        role = data.get('role')
+        clinic_name = data.get('clinic_name')
+
+        if role != Roles.PRIVATE_USER and not clinic_name:
+            raise serializers.ValidationError({"clinic_name": "Clinic name is required for this role."})
+            
         if data['password'] != data['confirm_password']:
             raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
         if User.objects.filter(email__iexact=data['email']).exists():
@@ -81,7 +87,10 @@ class SignupSerializer(serializers.Serializer):
         )
         profile = user.profile
         profile.role = validated_data.get('role', profile.role)
-        profile.clinic_name = validated_data.get('clinic_name', profile.clinic_name)
+        clinic_name = validated_data.get('clinic_name')
+        if not clinic_name:
+            clinic_name = "N/A"
+        profile.clinic_name = clinic_name
         profile.date_of_birth = validated_data.get('date_of_birth', profile.date_of_birth)
         profile.contact_number = validated_data.get('contact_number', profile.contact_number)
         profile.address = validated_data.get('address', profile.address)
