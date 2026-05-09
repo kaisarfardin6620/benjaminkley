@@ -3,7 +3,7 @@ FROM python:3.12-slim AS builder
 
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 
-# --- MODIFIED: Added libgomp1 for open3d dependency ---
+# --- MODIFIED: Added libgomp1 for trimesh/numpy dependencies ---
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
@@ -26,11 +26,12 @@ FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 
-# --- MODIFIED: Added libgomp1 for open3d dependency ---
+# --- MODIFIED: Added libgomp1 for trimesh/numpy dependencies ---
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
     libgomp1 \
+    fonts-dejavu-core \
     gosu \
     curl \
     && rm -rf /var/lib/apt/lists/*

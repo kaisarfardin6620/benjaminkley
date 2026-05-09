@@ -65,7 +65,6 @@ DATABASES = {
 
 USE_S3_STORAGE = os.getenv('USE_S3_STORAGE', 'False').lower() == 'true'
 
-AI_MODELS_DIR = BASE_DIR / 'ai_models'
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 

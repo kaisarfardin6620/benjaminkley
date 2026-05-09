@@ -146,9 +146,22 @@ def generate_scan_pdf(scan_object):
             draw = ImageDraw.Draw(pil_img)
             W, H = pil_img.size
 
-            try:
-                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 40)
-            except IOError:
+            font_paths = [
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+                "C:\\Windows\\Fonts\\arialbd.ttf",
+            ]
+            
+            font = None
+            for path in font_paths:
+                if os.path.exists(path):
+                    try:
+                        font = ImageFont.truetype(path, 40)
+                        break
+                    except Exception:
+                        continue
+            
+            if not font:
                 font = ImageFont.load_default()
 
             text_color = "#E74C3C"

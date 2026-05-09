@@ -19,7 +19,6 @@ A robust Django REST API backend designed to manage user authentication, process
 - **External AI Integration:** Connects to the KeenTools API to reconstruct a 3D head model from 2D photos
 - **Asynchronous Processing:** Uses Celery & Redis to handle the heavy 3D generation pipeline in the background without blocking the UI
 - **Biometric Analysis:** Uses trimesh and numpy to analyze the generated .obj file and calculate specific metrics (e.g., Head Width, Ear-to-Ear, Eye-to-Eye, Circumference)
-- **Reshaping:** Logic to scale/reshape generic 3D meshes based on calculated measurements
 
 ### 3. Reporting & Output
 
@@ -40,7 +39,7 @@ A robust Django REST API backend designed to manage user authentication, process
 - **Async Tasks:** Celery + Redis
 - **Storage:** AWS S3 (Media) or Local Storage
 - **Notifications:** Firebase Cloud Messaging (FCM) + SMTP Email
-- **Math/3D:** trimesh, numpy, open3d
+- **Math/3D:** trimesh, numpy
 
 ---
 

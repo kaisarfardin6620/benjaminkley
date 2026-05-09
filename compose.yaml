@@ -23,7 +23,6 @@ services:
     volumes:
       - static_volume:/app/staticfiles
       - ./media:/app/media
-      - ./ai_models:/app/ai_models:ro
     depends_on:
       redis:
         condition: service_healthy
@@ -43,7 +42,6 @@ services:
     volumes:
       - static_volume:/app/staticfiles
       - ./media:/app/media
-      - ./ai_models:/app/ai_models:ro
       - ./serviceAccountKey.json:/app/serviceAccountKey.json:ro
     depends_on:
       redis:
@@ -75,7 +73,6 @@ services:
     env_file: .env
     volumes:
       - ./media:/app/media
-      - ./ai_models:/app/ai_models:ro
       - ./serviceAccountKey.json:/app/serviceAccountKey.json:ro
     depends_on:
       redis:
