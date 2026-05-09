@@ -24,3 +24,5 @@ celery
 redis
 networkx
 drf_spectacular
+ujson==5.9.0
+django-redis==5.4.0
