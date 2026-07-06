@@ -5,7 +5,7 @@ from scans.models import Scan
 from contact_support.models import ContactMessage
 from .models import AdminNotification, SiteContent
 from authentication.serializers import PasswordValidator
-from django.conf import settings 
+from django.conf import settings
 from django.urls import reverse
 from core.utils import get_full_media_url
 from urllib.parse import urljoin
@@ -16,14 +16,20 @@ class DashboardUserSerializer(serializers.ModelSerializer):
     date_of_birth = serializers.DateField(source='profile.date_of_birth', read_only=True)
     number_of_scan = serializers.SerializerMethodField()
     profile_picture = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = ('id','first_name','last_name','email','profile_picture','role','date_of_birth','number_of_scan','status','date_joined')
+
     def get_profile_picture(self, obj):
         request = self.context.get('request')
+        if not hasattr(obj, 'profile') or not obj.profile:
+            return None
         return get_full_media_url(request, obj.profile.profile_picture)
+
     def get_number_of_scan(self, obj):
         return obj.scans.count()
+
     def update(self, instance, validated_data):
         profile_data = validated_data.pop('profile', {})
         status = profile_data.get('status')
@@ -58,6 +64,7 @@ class DashboardScanSerializer(serializers.ModelSerializer):
     cheek_guard_clearance_L = serializers.CharField()
     cheek_guard_height_M = serializers.CharField()
     cheek_guard_width_N = serializers.CharField()
+
     class Meta:
         model = Scan
         fields = (
@@ -102,70 +109,80 @@ class DashboardScanSerializer(serializers.ModelSerializer):
     def get_scan_images(self, obj):
         request = self.context.get('request')
         images = []
-        
         front_url = get_full_media_url(request, obj.image_front)
         if front_url:
             images.append(front_url)
-            
         for extra in obj.extra_images.all():
             url = get_full_media_url(request, extra.image)
             if url:
                 images.append(url)
-        
         return {
             "thumbnail": front_url,
             "all_images": images
         }
+
 
 class DashboardContactMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ContactMessage
         fields = '__all__'
 
+
 class PushNotificationSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=255)
     message = serializers.CharField()
+
 
 class AdminNotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = AdminNotification
         fields = ('id', 'notification_type', 'title', 'message', 'is_read', 'created_at')
 
+
 class SiteContentSerializer(serializers.ModelSerializer):
-    slug = serializers.SlugField(read_only=True)
+    slug = serializers.SlugField(read_only=False)
+
     class Meta:
         model = SiteContent
         fields = '__all__'
+
 
 class AdminProfileSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source='get_full_name')
     email = serializers.EmailField()
     contact_number = serializers.CharField(source='profile.contact_number')
     profile_picture = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = ('full_name', 'email', 'contact_number', 'profile_picture')
+
     def get_profile_picture(self, obj):
         request = self.context.get('request')
+        if not hasattr(obj, 'profile') or not obj.profile:
+            return None
         return get_full_media_url(request, obj.profile.profile_picture)
+
 
 class AdminUpdateProfileSerializer(serializers.ModelSerializer):
     profile_picture = serializers.ImageField(required=False, write_only=True)
+
     class Meta:
         model = UserProfile
         fields = ('contact_number', 'profile_picture')
+
 
 class AdminChangePasswordSerializer(serializers.Serializer):
     current_password = serializers.CharField(write_only=True, required=True)
     new_password = serializers.CharField(write_only=True, required=True, validators=[PasswordValidator.validate_password_strength])
     confirm_new_password = serializers.CharField(write_only=True, required=True)
-    
+
     def validate_current_password(self, value):
         user = self.context['request'].user
         if not user.check_password(value):
             raise serializers.ValidationError("Current password is not correct.")
         return value
-    
+
     def validate(self, data):
         if data['new_password'] != data['confirm_new_password']:
             raise serializers.ValidationError("New passwords do not match.")
